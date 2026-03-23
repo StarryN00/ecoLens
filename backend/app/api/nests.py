@@ -19,7 +19,7 @@ async def get_task_nests(
     db: AsyncSession = Depends(get_db),
 ):
     """获取任务的去重后虫巢列表"""
-    query = select(UniqueNest).where(UniqueNest.task_id == task_id)
+    query = select(UniqueNest).where(UniqueNest.task_id == str(task_id))
 
     if severity:
         query = query.where(UniqueNest.severity == severity)
@@ -85,7 +85,7 @@ async def get_task_results(task_id: UUID, db: AsyncSession = Depends(get_db)):
     """获取任务检测结果概览"""
     # 查询图片检测统计
     detection_result = await db.execute(
-        select(ImageDetection).where(ImageDetection.task_id == task_id)
+        select(ImageDetection).where(ImageDetection.task_id == str(task_id))
     )
     detections = detection_result.scalars().all()
 
@@ -101,7 +101,7 @@ async def get_task_results(task_id: UUID, db: AsyncSession = Depends(get_db)):
             func.count().filter(UniqueNest.severity == "severe").label("severe"),
             func.count().filter(UniqueNest.severity == "medium").label("medium"),
             func.count().filter(UniqueNest.severity == "light").label("light"),
-        ).where(UniqueNest.task_id == task_id)
+        ).where(UniqueNest.task_id == str(task_id))
     )
     nest_stats = nests_result.one()
 
@@ -127,7 +127,7 @@ async def get_task_statistics(task_id: UUID, db: AsyncSession = Depends(get_db))
     """获取任务详细统计数据"""
     # 查询图片统计
     img_result = await db.execute(
-        select(func.count(Image.id)).where(Image.task_id == task_id)
+        select(func.count(Image.id)).where(Image.task_id == str(task_id))
     )
     total_images = img_result.scalar() or 0
 
@@ -141,7 +141,7 @@ async def get_task_statistics(task_id: UUID, db: AsyncSession = Depends(get_db))
 
     # 查询检测结果统计
     det_result = await db.execute(
-        select(ImageDetection).where(ImageDetection.task_id == task_id)
+        select(ImageDetection).where(ImageDetection.task_id == str(task_id))
     )
     detections = det_result.scalars().all()
 
