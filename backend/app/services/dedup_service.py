@@ -1,3 +1,4 @@
+import json
 from typing import List, Dict
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,7 +85,7 @@ class DedupService:
                 severity=nest_data["severity"],
                 confidence=nest_data["confidence"],
                 detection_count=nest_data["detection_count"],
-                source_images=nest_data["source_images"],
+                source_images=json.dumps(nest_data["source_images"]),
             )
             self.db.add(unique_nest)
             count += 1
