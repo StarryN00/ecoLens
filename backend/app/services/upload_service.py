@@ -16,8 +16,8 @@ from app.services.task_service import TaskService
 class UploadService:
     """上传服务"""
 
-    UPLOAD_DIR = "/Users/starryn/project/ecoLens/uploads"
-    THUMBNAIL_DIR = "/Users/starryn/project/ecoLens/thumbnails"
+    UPLOAD_DIR = "/home/ubuntu/ecoLens/uploads"
+    THUMBNAIL_DIR = "/home/ubuntu/ecoLens/thumbnails"
 
     def __init__(self, db: AsyncSession):
         self.db = db

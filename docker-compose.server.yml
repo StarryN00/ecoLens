@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./thumbnails:/app/thumbnails
+      - ./backend/models:/app/models
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./nestdb.sqlite
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=sqla+sqlite:///celerydb.sqlite
+      - CELERY_RESULT_BACKEND=db+sqlite:///celerydb.sqlite
+    depends_on:
+      - redis
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  celery:
+    build: ./backend
+    volumes:
+      - ./uploads:/app/uploads
+      - ./thumbnails:/app/thumbnails
+      - ./backend/models:/app/models
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./nestdb.sqlite
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=sqla+sqlite:///celerydb.sqlite
+      - CELERY_RESULT_BACKEND=db+sqlite:///celerydb.sqlite
+    depends_on:
+      - redis
+    command: celery -A app.core.celery_app worker --loglevel=info --pool=solo
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

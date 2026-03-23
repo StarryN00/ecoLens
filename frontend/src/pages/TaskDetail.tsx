@@ -147,7 +147,7 @@ const TaskDetail: React.FC = () => {
       key: 'thumbnail',
       width: 120,
       render: (_: any, record: TaskImage) => {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
         // 尝试缩略图，如果不存在则使用原图
         const thumbUrl = `${baseUrl}/api/v1/images/${record.id}/thumbnail`;
         const originalUrl = `${baseUrl}/api/v1/images/${record.id}`;
@@ -221,7 +221,7 @@ const TaskDetail: React.FC = () => {
       width: 100,
       render: (_: any, record: TaskImage) => {
         if (!record.detection?.has_nest) return '-';
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
         const annotatedUrl = `${baseUrl}/api/v1/images/${record.id}/annotated`;
         return (
           <AntImage
