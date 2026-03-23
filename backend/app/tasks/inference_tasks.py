@@ -40,7 +40,7 @@ def process_image_task(self, task_id: str, image_id: str):
         # 使用异步数据库会话
         import asyncio
 
-        asyncio.run(_process_image_async(self, task_id, image_id))
+        asyncio.run(_process_image_async(self, task_id, image_id, start_time))
 
         elapsed_time = int((time.time() - start_time) * 1000)
         logger.info(f"图片处理完成: image_id={image_id}, 耗时={elapsed_time}ms")
@@ -61,7 +61,7 @@ def process_image_task(self, task_id: str, image_id: str):
             raise
 
 
-async def _process_image_async(self, task_id: str, image_id: str):
+async def _process_image_async(self, task_id: str, image_id: str, start_time: float):
     """异步处理图片"""
     async with AsyncSessionLocal() as db:
         try:
@@ -124,7 +124,7 @@ async def _process_image_async(self, task_id: str, image_id: str):
                 has_nest=len(detections) > 0,
                 nest_count=len(detections),
                 max_severity=_get_max_severity(detections),
-                inference_time_ms=int((time.time() - time.time()) * 1000),
+                inference_time_ms=int((time.time() - start_time) * 1000),
                 model_version="v1.0",
             )
             db.add(image_detection)
@@ -135,10 +135,36 @@ async def _process_image_async(self, task_id: str, image_id: str):
 
             await db.commit()
 
+            # 9. 检查是否所有图片都处理完成，如果是则立即触发去重
+            await _check_and_trigger_deduplication(task_id)
+
         except Exception as e:
             await db.rollback()
             logger.error(f"处理过程异常: {e}")
             raise
+
+
+async def _check_and_trigger_deduplication(task_id: str):
+    """检查是否所有图片处理完成，如果是则触发去重"""
+    async with AsyncSessionLocal() as db:
+        try:
+            # 获取任务信息
+            from app.services.task_service import TaskService
+
+            task_service = TaskService(db)
+            task = await task_service.get_task(task_id)
+
+            if not task:
+                return
+
+            # 检查是否所有图片都处理完成
+            if task.processed_images >= task.total_images:
+                logger.info(f"任务 {task_id} 所有图片处理完成，触发去重")
+                # 立即触发去重任务
+                process_task_deduplication.delay(task_id)
+
+        except Exception as e:
+            logger.error(f"检查去重触发失败: {e}")
 
 
 def _get_max_severity(detections):

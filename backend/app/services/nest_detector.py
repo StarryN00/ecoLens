@@ -7,14 +7,15 @@ from typing import List, Dict, Any, Optional
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 try:
     from ultralytics import YOLO  # type: ignore
-except Exception:  # pragma: no cover
+except Exception as e:  # pragma: no cover
+    logger.error(f"YOLO导入失败: {e}")
     YOLO = None  # type: ignore
 
 from PIL import Image  # for size extraction
-
-logger = logging.getLogger(__name__)
 
 
 class NestDetector:
