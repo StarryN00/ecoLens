@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import List, Optional
@@ -11,19 +12,20 @@ from sqlalchemy import select
 
 from app.models import Image
 from app.services.task_service import TaskService
+from app.core.config import get_settings
 
 
 class UploadService:
     """上传服务"""
 
-    UPLOAD_DIR = "/home/ubuntu/ecoLens/uploads"
-    THUMBNAIL_DIR = "/home/ubuntu/ecoLens/thumbnails"
-
     def __init__(self, db: AsyncSession):
         self.db = db
+        settings = get_settings()
+        self.UPLOAD_DIR = settings.UPLOAD_DIR
+        self.THUMBNAIL_DIR = settings.THUMBNAIL_DIR
         # 确保目录存在
-        Path(self.UPLOAD_DIR).mkdir(exist_ok=True)
-        Path(self.THUMBNAIL_DIR).mkdir(exist_ok=True)
+        Path(self.UPLOAD_DIR).mkdir(exist_ok=True, parents=True)
+        Path(self.THUMBNAIL_DIR).mkdir(exist_ok=True, parents=True)
 
     async def upload_images(self, task_id: UUID, files: List) -> List[dict]:
         """批量上传图片"""
@@ -111,6 +113,10 @@ class UploadService:
             data["width"] = img.width
             data["height"] = img.height
 
+            xmp_altitude = self._parse_xmp_altitude(img)
+            if xmp_altitude is not None:
+                data["altitude"] = xmp_altitude
+
             exif = img._getexif()
             if not exif:
                 return data
@@ -142,8 +148,7 @@ class UploadService:
                     data["longitude"] = lon
                     data["has_gps"] = True
 
-                # 高度
-                if "GPSAltitude" in gps_info:
+                if data["altitude"] is None and "GPSAltitude" in gps_info:
                     data["altitude"] = float(gps_info["GPSAltitude"])
 
             # 焦距
@@ -170,6 +175,31 @@ class UploadService:
             print(f"解析EXIF失败: {e}")
 
         return data
+
+    def _parse_xmp_altitude(self, img: PILImage.Image) -> Optional[float]:
+        try:
+            xmp_data = img.info.get("xmp") or img.info.get("xml")
+            if not xmp_data:
+                return None
+
+            xmp_str = (
+                xmp_data.decode("utf-8", errors="ignore")
+                if isinstance(xmp_data, bytes)
+                else str(xmp_data)
+            )
+
+            match = re.search(r"RelativeAltitude[^>]*>([\d.+-]+)", xmp_str)
+            if match:
+                return float(match.group(1))
+
+            match = re.search(r'RelativeAltitude=["\']([\d.+-]+)["\']', xmp_str)
+            if match:
+                return float(match.group(1))
+
+        except Exception as e:
+            print(f"解析 XMP 高度失败: {e}")
+
+        return None
 
     def _convert_dms(self, dms) -> float:
         """转换度分秒为十进制度"""
