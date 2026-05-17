@@ -1,9 +1,12 @@
+import asyncio
 import os
 import re
 import shutil
 from pathlib import Path
 from typing import List, Optional
 from uuid import UUID, uuid4
+
+from fastapi import HTTPException, status
 from PIL import Image as PILImage
 from PIL.ExifTags import TAGS, GPSTAGS
 
@@ -13,6 +16,31 @@ from sqlalchemy import select
 from app.models import Image
 from app.services.task_service import TaskService
 from app.core.config import get_settings
+
+
+# 上传校验常量
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
+MAX_FILE_SIZE = 30 * 1024 * 1024  # 30 MB
+MAX_BATCH_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
+MAX_FILES_PER_BATCH = 200
+MAX_FILENAME_LENGTH = 200
+CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+
+def _sanitize_filename(filename: str) -> str:
+    """剔除路径分隔符和危险字符，限制长度"""
+    base = os.path.basename(filename or "")
+    safe = re.sub(r"[^\w.\-]", "_", base)
+    if not safe:
+        safe = "file"
+    if len(safe) > MAX_FILENAME_LENGTH:
+        # 保留扩展名，截断主名
+        root, ext = os.path.splitext(safe)
+        ext = ext[:16]
+        root = root[: MAX_FILENAME_LENGTH - len(ext)]
+        safe = root + ext
+    return safe
 
 
 class UploadService:
@@ -28,31 +56,97 @@ class UploadService:
         Path(self.THUMBNAIL_DIR).mkdir(exist_ok=True, parents=True)
 
     async def upload_images(self, task_id: UUID, files: List) -> List[dict]:
-        """批量上传图片"""
+        """批量上传图片，含类型/大小/真实性校验"""
+        if len(files) > MAX_FILES_PER_BATCH:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"单次上传图片数不能超过 {MAX_FILES_PER_BATCH} 张",
+            )
+
         results = []
         task_service = TaskService(self.db)
+        batch_size_total = 0
 
         for file in files:
-            # 生成唯一ID
+            # 1) 扩展名校验
+            safe_filename = _sanitize_filename(file.filename or "")
+            ext = os.path.splitext(safe_filename)[1].lower()
+            if ext not in ALLOWED_EXTENSIONS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"不支持的文件类型: {ext or '<empty>'}",
+                )
+
+            # 2) MIME 校验
+            content_type = (file.content_type or "").lower()
+            if content_type not in ALLOWED_MIME_TYPES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"不支持的 MIME 类型: {content_type or '<empty>'}",
+                )
+
             image_id = uuid4()
+            file_path = f"{self.UPLOAD_DIR}/{image_id}_{safe_filename}"
 
-            # 保存原始文件
-            file_path = f"{self.UPLOAD_DIR}/{image_id}_{file.filename}"
-            with open(file_path, "wb") as f:
-                shutil.copyfileobj(file.file, f)
+            # 3) 分块写入 + 边写边校验大小
+            written = 0
+            # FastAPI 的 UploadFile.read 是协程；测试里也可能传入同步对象
+            read_is_async = asyncio.iscoroutinefunction(getattr(file, "read", None))
+            try:
+                with open(file_path, "wb") as out:
+                    while True:
+                        if read_is_async:
+                            chunk = await file.read(CHUNK_SIZE)
+                        else:
+                            chunk = file.file.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        if written > MAX_FILE_SIZE:
+                            out.close()
+                            self._cleanup(file_path)
+                            raise HTTPException(
+                                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                detail=f"单个文件大小超过 {MAX_FILE_SIZE // (1024 * 1024)}MB 限制",
+                            )
+                        batch_size_total += len(chunk)
+                        if batch_size_total > MAX_BATCH_SIZE:
+                            out.close()
+                            self._cleanup(file_path)
+                            raise HTTPException(
+                                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                detail=f"批次总大小超过 {MAX_BATCH_SIZE // (1024 * 1024 * 1024)}GB 限制",
+                            )
+                        out.write(chunk)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                self._cleanup(file_path)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"写入文件失败: {exc}",
+                )
 
-            # 解析EXIF
+            # 4) 真实性二次校验：PIL 能否打开 & verify
+            if not self._verify_real_image(file_path):
+                self._cleanup(file_path)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="无效图片：文件内容不是合法的 JPEG/PNG",
+                )
+
+            # 解析 EXIF
             exif_data = self._parse_exif(file_path)
 
             # 生成缩略图
             thumbnail_path = f"{self.THUMBNAIL_DIR}/{image_id}.jpg"
             self._create_thumbnail(file_path, thumbnail_path)
 
-            # 创建数据库记录
+            # 数据库记录
             image = Image(
                 id=str(image_id),
                 task_id=str(task_id),
-                filename=file.filename,
+                filename=safe_filename,
                 storage_path=file_path,
                 latitude=exif_data.get("latitude"),
                 longitude=exif_data.get("longitude"),
@@ -69,18 +163,34 @@ class UploadService:
             results.append(
                 {
                     "id": image_id,
-                    "filename": file.filename,
+                    "filename": safe_filename,
                     "has_gps": image.has_gps,
                     "latitude": image.latitude,
                     "longitude": image.longitude,
                 }
             )
 
-            # 更新任务图片计数
             await task_service.increment_image_count(task_id)
 
         await self.db.commit()
         return results
+
+    @staticmethod
+    def _cleanup(path: str) -> None:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _verify_real_image(path: str) -> bool:
+        try:
+            with PILImage.open(path) as img:
+                img.verify()
+            return True
+        except Exception:
+            return False
 
     async def list_images(self, task_id, skip: int = 0, limit: int = 50) -> List[Image]:
         """查询图片列表"""
