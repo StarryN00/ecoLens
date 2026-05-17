@@ -4,7 +4,10 @@ from contextlib import asynccontextmanager
 
 from app.core.config import get_settings
 from app.core.database import init_db
-from app.api import tasks, images, nests
+from app.api import tasks, images, nests, auth
+
+# 显式引入 models 以确保 SQLAlchemy 的 Base.metadata 在 init_db 时能创建 users 表
+from app import models  # noqa: F401
 
 settings = get_settings()
 
@@ -35,6 +38,7 @@ app.add_middleware(
 )
 
 # 注册路由
+app.include_router(auth.router)
 app.include_router(tasks.router)
 app.include_router(images.router)
 app.include_router(nests.router)
