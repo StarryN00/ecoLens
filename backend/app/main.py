@@ -28,10 +28,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 配置CORS
+# 配置 CORS：必须显式列出允许的来源（浏览器规范不允许同时使用 "*" 和 credentials）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

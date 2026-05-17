@@ -6,11 +6,16 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models import InspectionTask, Image, ImageDetection
 from app.services.task_service import TaskService
 from app.tasks.inference_tasks import trigger_task_processing
 
-router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+router = APIRouter(
+    prefix="/api/v1/tasks",
+    tags=["tasks"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 class TaskCreateRequest(BaseModel):

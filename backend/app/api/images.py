@@ -5,11 +5,16 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.services.upload_service import UploadService
 from app.models import ImageDetection
 from app.tasks.inference_tasks import trigger_task_processing
 
-router = APIRouter(prefix="/api/v1", tags=["images"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["images"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.post("/tasks/{task_id}/images")

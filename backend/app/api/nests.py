@@ -5,9 +5,14 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models import UniqueNest, RawNestDetection, Image, ImageDetection
 
-router = APIRouter(prefix="/api/v1", tags=["nests"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["nests"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/tasks/{task_id}/nests")
