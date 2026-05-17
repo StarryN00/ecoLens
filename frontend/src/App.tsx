@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from 'antd';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import TaskList from './pages/TaskList';
 import TaskCreate from './pages/TaskCreate';
 import TaskDetail from './pages/TaskDetail';
@@ -34,6 +35,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/tasks"
           element={

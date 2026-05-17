@@ -11,7 +11,7 @@ const api = axios.create({
   }
 });
 
-// 请求拦截器
+// 请求拦截器：自动附加 Bearer token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -31,11 +31,31 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // 避免在已经位于 /login 或 /register 时还跳一次
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/register') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
 );
+
+// 认证相关 API
+export const authApi = {
+  // 登录使用 application/x-www-form-urlencoded（OAuth2PasswordRequestForm 要求）
+  login: (username: string, password: string) => {
+    const body = new URLSearchParams();
+    body.append('username', username);
+    body.append('password', password);
+    return api.post('/api/v1/auth/login', body, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+  },
+  register: (data: { username: string; password: string; email?: string }) =>
+    api.post('/api/v1/auth/register', data),
+  getMe: () => api.get('/api/v1/auth/me'),
+};
 
 // 任务相关API
 export const taskApi = {
@@ -45,10 +65,22 @@ export const taskApi = {
   deleteTask: (id: string) => api.delete(`/api/v1/tasks/${id}`),
   uploadImages: (taskId: string, formData: FormData) => {
     // 使用 fetch 代替 axios，避免默认 headers 干扰 multipart 上传
+    // 手动附加 Authorization
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     return fetch(`${API_BASE_URL}/api/v1/tasks/${taskId}/images`, {
       method: 'POST',
       body: formData,
+      headers,
     }).then(res => {
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        throw new Error('未授权');
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     });
