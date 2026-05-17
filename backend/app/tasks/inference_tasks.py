@@ -15,7 +15,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from celery import shared_task  # noqa: F401  (保留导出兼容)
+from celery import chord, group, shared_task  # noqa: F401  (保留导出兼容)
 from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import select
 
@@ -169,9 +169,9 @@ def process_image_sync(task_id: str, image_id: str) -> Dict[str, Any]:
 
             db.commit()
 
-            # 兼容老链路：仍在最后一张完成时触发去重（commit #3 改成 chord）
-            _check_and_trigger_deduplication(task_id)
-
+            # 去重不在这里触发：由 chord(header)(callback) 显式编排
+            # （header = group(process_image_task...)，callback =
+            #  process_task_deduplication.si(task_id)）。见 trigger_processing_sync。
             return {
                 "status": "success",
                 "task_id": task_id,
@@ -181,19 +181,6 @@ def process_image_sync(task_id: str, image_id: str) -> Dict[str, Any]:
         except Exception:
             db.rollback()
             raise
-
-
-def _check_and_trigger_deduplication(task_id: str) -> None:
-    """旧链路：所有图片处理完后触发去重。commit #3 会移除该函数。"""
-    with SyncSessionLocal() as db:
-        task = db.execute(
-            select(InspectionTask).where(InspectionTask.id == task_id)
-        ).scalar_one_or_none()
-        if task is None:
-            return
-        if task.total_images and task.processed_images >= task.total_images:
-            logger.info(f"任务 {task_id} 所有图片处理完成，触发去重")
-            process_task_deduplication.delay(task_id)
 
 
 # ---------------------------------------------------------------------------
@@ -273,21 +260,31 @@ def deduplicate_task_sync(task_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # 同步纯函数核心 - 触发整批处理
 # ---------------------------------------------------------------------------
-def trigger_processing_sync(task_id: str) -> Dict[str, Any]:
+def trigger_processing_sync(
+    task_id: str, image_ids: Optional[List[str]] = None
+) -> Dict[str, Any]:
     """触发整批图片的推理。
 
     1. 把任务状态置为 processing、processed_images 清零
-    2. 把所有图片 id 一一 enqueue process_image_task
-    3. 兜底 5 分钟后 enqueue 一次 process_task_deduplication（commit #3 删）
+    2. 用 Celery chord 显式编排：所有 process_image_task 完成后
+       自动调度 process_task_deduplication，避免之前"每张图都查 task
+       + 5 分钟兜底"的双路径竞态（见 #7）。
+    3. 如果 image_ids 没显式传，就从 DB 查（向后兼容旧调用方）
+
+    image_ids 可以由调用方显式传入（推荐，见 #6：API 层 commit 后立刻
+    把入库的 image_id 列表传过来，避免 worker 再读一次 DB 撞上事务窗口）。
     """
     with SyncSessionLocal() as db:
         try:
-            images = (
-                db.execute(select(Image).where(Image.task_id == task_id))
-                .scalars()
-                .all()
-            )
-            image_ids = [str(img.id) for img in images]
+            if image_ids is None:
+                images = (
+                    db.execute(select(Image).where(Image.task_id == task_id))
+                    .scalars()
+                    .all()
+                )
+                resolved_ids: List[str] = [str(img.id) for img in images]
+            else:
+                resolved_ids = [str(i) for i in image_ids]
 
             task = db.execute(
                 select(InspectionTask).where(InspectionTask.id == task_id)
@@ -300,15 +297,24 @@ def trigger_processing_sync(task_id: str) -> Dict[str, Any]:
             db.rollback()
             raise
 
-    for image_id in image_ids:
-        process_image_task.delay(task_id, image_id)
+    if not resolved_ids:
+        # 没有任何图片可处理：直接走一次去重收尾（也会把 task.status 置成 completed）
+        logger.info(f"任务 {task_id} 没有图片，直接触发去重收尾")
+        process_task_deduplication.delay(task_id)
+        return {"status": "triggered", "task_id": task_id, "images": 0}
 
-    logger.info(f"已创建 {len(image_ids)} 个图片处理任务")
+    # chord(header)(callback)：header 全部成功后才执行 callback；
+    # 失败由 process_task_deduplication 内部统一处理（见 #7）。
+    # process_task_deduplication.si(task_id)：immutable signature，
+    # 不会把 header 的返回值塞进 args。
+    header = group(
+        process_image_task.s(task_id, image_id) for image_id in resolved_ids
+    )
+    callback = process_task_deduplication.si(task_id)
+    chord(header)(callback)
 
-    # 旧兜底链路，commit #3 会被 chord 替换
-    process_task_deduplication.apply_async(args=[task_id], countdown=300)
-
-    return {"status": "triggered", "task_id": task_id, "images": len(image_ids)}
+    logger.info(f"已发起 chord: task_id={task_id}, header_size={len(resolved_ids)}")
+    return {"status": "triggered", "task_id": task_id, "images": len(resolved_ids)}
 
 
 # ---------------------------------------------------------------------------
@@ -330,13 +336,52 @@ def process_image_task(self, task_id: str, image_id: str):
 
 @celery_app.task
 def process_task_deduplication(task_id: str):
-    """任务级去重（Celery 入口）"""
+    """任务级去重（Celery 入口）。
+
+    被 chord(header)(callback) 调用。如果 header 里任一 process_image_task
+    最终失败，Celery 仍会把 callback 投递过来（取决于 broker 行为），
+    更重要的是去重本身可能出错。两种情况都把 task.status 改成 failed
+    并把原因写到一个 InspectionTask 上能记录的字段——当前模型没有专门
+    的 error 字段，所以只能写日志 + 状态码，让 API 层看到 failed 时拉日志。
+    """
     logger.info(f"开始任务去重: task_id={task_id}")
-    return deduplicate_task_sync(task_id)
+    try:
+        return deduplicate_task_sync(task_id)
+    except Exception as exc:
+        logger.exception(f"去重失败，task_id={task_id}, error={exc}")
+        _mark_task_failed(task_id, reason=str(exc))
+        # 不再 raise：chord callback 自己挂掉没有意义，状态已经写到 DB
+        return {"status": "failed", "task_id": task_id, "error": str(exc)}
+
+
+def _mark_task_failed(task_id: str, reason: str) -> None:
+    """把任务状态改为 failed。reason 只走日志（当前模型无 error 字段）。"""
+    try:
+        with SyncSessionLocal() as db:
+            task = db.execute(
+                select(InspectionTask).where(InspectionTask.id == task_id)
+            ).scalar_one_or_none()
+            if task is not None:
+                task.status = "failed"
+                db.commit()
+            logger.error(f"任务 {task_id} 标记为 failed，reason={reason}")
+    except Exception as inner:
+        # 写状态都失败了，只能记日志，不再传播
+        logger.exception(
+            f"标记任务 failed 时再次失败 task_id={task_id}, inner={inner}"
+        )
 
 
 @celery_app.task
-def trigger_task_processing(task_id: str):
-    """触发任务处理（Celery 入口，由上传接口调用）"""
-    logger.info(f"触发任务处理: task_id={task_id}")
-    return trigger_processing_sync(task_id)
+def trigger_task_processing(task_id: str, image_ids: Optional[List[str]] = None):
+    """触发任务处理（Celery 入口，由上传接口调用）。
+
+    image_ids 由 API 层在 upload commit 之后显式传入（见 #6），避免
+    worker 自己再去 SELECT 一次撞 race。如果调用方没传（旧代码/回放），
+    走 DB fallback。
+    """
+    logger.info(
+        f"触发任务处理: task_id={task_id}, "
+        f"image_ids_passed={None if image_ids is None else len(image_ids)}"
+    )
+    return trigger_processing_sync(task_id, image_ids=image_ids)
