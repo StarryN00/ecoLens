@@ -39,3 +39,10 @@ celerydb.sqlite
 # OS
 .DS_Store
 Thumbs.db
+
+# 环境变量与密钥
+.env
+.env.*
+!.env.example
+!.env.sample
+

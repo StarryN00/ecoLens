@@ -1,0 +1,6 @@
+# 服务器连接信息（请勿提交真实值，使用 SSH key 或团队密码管理器）
+ip: <server-ip>
+port: 22
+username: <username>
+# 推荐改用 SSH key，不再使用密码
+# password: <do-not-commit>
