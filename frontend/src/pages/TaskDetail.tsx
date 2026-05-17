@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Statistic, Row, Col, Table, Button, message, Tabs, Image as AntImage, Progress } from 'antd';
+import { Card, Descriptions, Tag, Statistic, Row, Col, Table, Button, message, Tabs, Progress } from 'antd';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { taskApi } from '../services/api';
+import AuthedImage from '../components/AuthedImage';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { DownloadOutlined, EyeOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
@@ -147,17 +148,13 @@ const TaskDetail: React.FC = () => {
       key: 'thumbnail',
       width: 120,
       render: (_: any, record: TaskImage) => {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        // 尝试缩略图，如果不存在则使用原图
-        const thumbUrl = `${baseUrl}/api/v1/images/${record.id}/thumbnail`;
-        const originalUrl = `${baseUrl}/api/v1/images/${record.id}`;
+        // 后端图片接口需要 Bearer token，AuthedImage 会自动 fetch -> blob URL
         return (
-          <AntImage
-            src={thumbUrl}
+          <AuthedImage
+            path={`/api/v1/images/${record.id}/thumbnail`}
+            previewPath={`/api/v1/images/${record.id}`}
             alt={record.filename}
             style={{ width: 100, height: 75, objectFit: 'cover', cursor: 'pointer', border: record.detection?.has_nest ? '2px solid #ff4d4f' : 'none' }}
-            preview={{ src: originalUrl }}
-            fallback={originalUrl}
           />
         );
       }
@@ -221,15 +218,11 @@ const TaskDetail: React.FC = () => {
       width: 100,
       render: (_: any, record: TaskImage) => {
         if (!record.detection?.has_nest) return '-';
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        const annotatedUrl = `${baseUrl}/api/v1/images/${record.id}/annotated`;
         return (
-          <AntImage
-            src={annotatedUrl}
+          <AuthedImage
+            path={`/api/v1/images/${record.id}/annotated`}
             alt="检测结果"
             style={{ width: 80, height: 60, objectFit: 'cover', cursor: 'pointer' }}
-            preview={{ src: annotatedUrl }}
-            fallback="检测结果加载失败"
           />
         );
       }

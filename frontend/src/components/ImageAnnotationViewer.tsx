@@ -1,7 +1,12 @@
 import React from 'react';
 import { Modal, Image } from 'antd';
+import { fetchAuthedImageUrl } from '../services/api';
 
 interface ImageAnnotationViewerProps {
+  /**
+   * 图片相对路径（不带 host），例如 `/api/v1/images/{id}`。
+   * 组件会自动用 Bearer token fetch 并转成 blob URL，避免 401。
+   */
   imageUrl: string;
   detections: Array<{
     bbox: [number, number, number, number]; // [x1, y1, x2, y2]
@@ -21,6 +26,37 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [imageLoaded, setImageLoaded] = React.useState(false);
   const [imageSize, setImageSize] = React.useState({ width: 0, height: 0 });
+  const [resolvedUrl, setResolvedUrl] = React.useState<string | undefined>(undefined);
+
+  // 用 fetch + Bearer token 取图，转成 blob URL；卸载或 imageUrl 变化时释放。
+  React.useEffect(() => {
+    if (!visible || !imageUrl) {
+      return;
+    }
+    let blobUrl: string | null = null;
+    let cancelled = false;
+    setResolvedUrl(undefined);
+    setImageLoaded(false);
+
+    (async () => {
+      try {
+        const url = await fetchAuthedImageUrl(imageUrl);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        blobUrl = url;
+        setResolvedUrl(url);
+      } catch {
+        // 鉴权失败 fetchAuthedImageUrl 已经重定向，这里忽略
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [imageUrl, visible]);
 
   React.useEffect(() => {
     if (visible && imageLoaded && canvasRef.current) {
@@ -88,10 +124,11 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
     >
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <Image
-          src={imageUrl}
+          src={resolvedUrl}
           alt="Annotated"
           onLoad={handleImageLoad}
           style={{ maxWidth: '100%', maxHeight: '600px' }}
+          preview={false}
         />
         <canvas
           ref={canvasRef}

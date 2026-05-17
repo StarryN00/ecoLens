@@ -93,11 +93,62 @@ export const taskApi = {
   getNestDetail: (id: string) => api.get(`/api/v1/nests/${id}`),
 };
 
+/**
+ * 获取需要鉴权的二进制资源（图片等），返回浏览器内的 blob URL。
+ *
+ * 后端 /api/v1/images/* 接口在 Team A 的安全加固后强制要求 Bearer token，
+ * 但浏览器原生的 <img src> 不会自动带上 Authorization 头，因此直接把
+ * `/api/v1/images/{id}` 拼到 src 上会得到 401。本函数用 fetch 显式带 token
+ * 取回 blob，再通过 URL.createObjectURL 把它包成一个临时 URL 给 <img> 用。
+ *
+ * 调用方必须负责在组件卸载/URL 更新时调用 URL.revokeObjectURL 释放内存。
+ */
+export async function fetchAuthedImageUrl(path: string): Promise<string> {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    const p = window.location.pathname;
+    if (p !== '/login' && p !== '/register') {
+      window.location.href = '/login';
+    }
+    throw new Error('未授权');
+  }
+  if (!res.ok) {
+    throw new Error(`Image fetch failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 // 图片相关API
 export const imageApi = {
+  /**
+   * @deprecated 返回的是裸 URL，<img src> 不会自动带 Bearer token，会 401。
+   * 请改用 `imageApi.fetchImage(id)` 拿到 blob URL 再交给 <img>。
+   */
   getImage: (id: string) => api.get(`/api/v1/images/${id}`),
+  /**
+   * @deprecated 返回的是裸 URL，<img src> 不会自动带 Bearer token，会 401。
+   * 请改用 `imageApi.fetchThumbnail(id)` 拿到 blob URL 再交给 <img>。
+   */
   getThumbnail: (id: string) => `${API_BASE_URL}/api/v1/images/${id}/thumbnail`,
+  /**
+   * @deprecated 返回的是裸 URL，<img src> 不会自动带 Bearer token，会 401。
+   * 请改用 `imageApi.fetchAnnotated(id)` 拿到 blob URL 再交给 <img>。
+   */
   getAnnotated: (id: string) => `${API_BASE_URL}/api/v1/images/${id}/annotated`,
+
+  // 推荐用法：返回 blob URL，调用方负责 URL.revokeObjectURL 清理
+  fetchImage: (id: string) => fetchAuthedImageUrl(`/api/v1/images/${id}`),
+  fetchThumbnail: (id: string) =>
+    fetchAuthedImageUrl(`/api/v1/images/${id}/thumbnail`),
+  fetchAnnotated: (id: string) =>
+    fetchAuthedImageUrl(`/api/v1/images/${id}/annotated`),
 };
 
 export default api;
