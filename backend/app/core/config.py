@@ -36,8 +36,27 @@ class Settings(BaseSettings):
     TREE_MODEL_PATH: str = "./models/best.pt"
     NEST_MODEL_PATH: str = "./models/best.pt"
 
+    # JWT 鉴权
+    # SECRET_KEY 没有默认值：必须通过环境变量（或 .env）显式配置
+    # 生成方式: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 小时
+
+    # CORS 允许的来源（逗号分隔），生产环境必须显式指定
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+
     class Config:
         env_file = ".env"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """将逗号分隔的 CORS 配置解析为列表"""
+        return [
+            origin.strip()
+            for origin in self.CORS_ALLOWED_ORIGINS.split(",")
+            if origin.strip()
+        ]
 
 
 @lru_cache()

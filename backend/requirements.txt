@@ -16,6 +16,11 @@ numpy==1.26.2
 scikit-learn==1.3.2
 geoalchemy2==0.14.2
 
+# 认证/安全依赖
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+email-validator==2.1.0
+
 # AI推理依赖
 ultralytics==8.0.200
 torch==2.1.1
