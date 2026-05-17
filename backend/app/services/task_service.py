@@ -17,12 +17,19 @@ class TaskService:
         task_name: str,
         area_name: Optional[str] = None,
         operator: Optional[str] = None,
+        owner_id: Optional[str] = None,
     ) -> InspectionTask:
-        """创建巡检任务"""
+        """创建巡检任务。
+
+        owner_id 由路由层从 current_user 注入；服务层不再自动 fallback —
+        DB 列 NOT NULL，缺失会在 commit 时炸出 IntegrityError，比静默
+        留个 NULL 主席更安全。
+        """
         task = InspectionTask(
             task_name=task_name,
             area_name=area_name,
             operator=operator,
+            owner_id=owner_id,
             status="uploading",
         )
         self.db.add(task)
@@ -40,13 +47,23 @@ class TaskService:
         return result.scalar_one_or_none()
 
     async def list_tasks(
-        self, skip: int = 0, limit: int = 20, status: Optional[str] = None
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        status: Optional[str] = None,
+        owner_id: Optional[str] = None,
     ) -> List[InspectionTask]:
-        """查询任务列表"""
+        """查询任务列表。
+
+        owner_id 非空时按 owner 过滤（普通用户只看自己的任务）；
+        None 表示不过滤（admin 视图）。
+        """
         query = select(InspectionTask).order_by(desc(InspectionTask.created_at))
 
         if status:
             query = query.where(InspectionTask.status == status)
+        if owner_id is not None:
+            query = query.where(InspectionTask.owner_id == owner_id)
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)

@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Optional
-from uuid import UUID
+from typing import List
 
+from app.api.deps import get_owned_image, get_owned_task
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.services.upload_service import UploadService
-from app.models import ImageDetection
-from app.tasks.inference_tasks import trigger_task_processing
+from app.models import Image, ImageDetection, InspectionTask
 
 router = APIRouter(
     prefix="/api/v1",
@@ -19,23 +18,29 @@ router = APIRouter(
 
 @router.post("/tasks/{task_id}/images")
 async def upload_images(
-    task_id: str,
     files: List[UploadFile] = File(...),
+    task: InspectionTask = Depends(get_owned_task),
     db: AsyncSession = Depends(get_db),
 ):
-    """批量上传图片（上传完成后自动触发AI处理）"""
+    """批量上传图片（上传完成后自动触发AI处理）。
+
+    ownership：通过 get_owned_task 校验，无权访问的非 owner 看到 404
+    "任务不存在"，与不存在共用同一响应（防资源枚举）。
+    """
     service = UploadService(db)
-    results = await service.upload_images(task_id, files)
+    results = await service.upload_images(str(task.id), files)
 
     # commit 已经发生在 upload_images 内部；把入库后的真实 image_id 列表
     # 显式传给 trigger_task_processing，worker 端不再 SELECT Image 表
     # （避免上传/触发之间的事务窗口里看到旧 total_images）。见 #6。
     if results:
+        from app.tasks.inference_tasks import trigger_task_processing
+
         image_ids = [str(img["id"]) for img in results]
-        trigger_task_processing.delay(task_id, image_ids)
+        trigger_task_processing.delay(str(task.id), image_ids)
 
     return {
-        "task_id": task_id,
+        "task_id": str(task.id),
         "uploaded": len(results),
         "images": [
             {
@@ -52,12 +57,15 @@ async def upload_images(
 
 @router.get("/tasks/{task_id}/images")
 async def list_task_images(
-    task_id: str, skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db)
+    skip: int = 0,
+    limit: int = 50,
+    task: InspectionTask = Depends(get_owned_task),
+    db: AsyncSession = Depends(get_db),
 ):
-    """查询任务图片列表（包含检测结果）"""
+    """查询任务图片列表（包含检测结果）。ownership 已校验。"""
     service = UploadService(db)
     # 使用字符串ID查询
-    images = await service.list_images(task_id, skip, limit)
+    images = await service.list_images(str(task.id), skip, limit)
 
     # 获取所有图片的检测结果
     image_ids = [str(img.id) for img in images]
@@ -94,16 +102,10 @@ async def list_task_images(
 
 
 @router.get("/images/{image_id}")
-async def get_image_file(image_id: str, db: AsyncSession = Depends(get_db)):
-    """获取图片文件（原图）"""
+async def get_image_file(img: Image = Depends(get_owned_image)):
+    """获取图片文件（原图）。ownership 通过 get_owned_image 校验。"""
     from fastapi.responses import FileResponse
     import os
-
-    service = UploadService(db)
-    img = await service.get_image(image_id)
-
-    if not img:
-        raise HTTPException(status_code=404, detail="图片不存在")
 
     if os.path.exists(img.storage_path):
         return FileResponse(img.storage_path, filename=img.filename)
@@ -112,14 +114,8 @@ async def get_image_file(image_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/images/{image_id}/info")
-async def get_image_info(image_id: str, db: AsyncSession = Depends(get_db)):
-    """查询单张图片详情"""
-    service = UploadService(db)
-    img = await service.get_image(image_id)
-
-    if not img:
-        raise HTTPException(status_code=404, detail="图片不存在")
-
+async def get_image_info(img: Image = Depends(get_owned_image)):
+    """查询单张图片详情。ownership 已校验。"""
     return {
         "id": str(img.id),
         "task_id": str(img.task_id),
@@ -138,18 +134,12 @@ async def get_image_info(image_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/images/{image_id}/thumbnail")
-async def get_image_thumbnail(image_id: str, db: AsyncSession = Depends(get_db)):
-    """获取图片缩略图（不存在则返回原图）"""
+async def get_image_thumbnail(img: Image = Depends(get_owned_image)):
+    """获取图片缩略图（不存在则返回原图）。ownership 已校验。"""
     from fastapi.responses import FileResponse
     import os
 
-    service = UploadService(db)
-    img = await service.get_image(image_id)
-
-    if not img:
-        raise HTTPException(status_code=404, detail="图片不存在")
-
-    thumbnail_path = f"./thumbnails/{image_id}.jpg"
+    thumbnail_path = f"./thumbnails/{img.id}.jpg"
     if os.path.exists(thumbnail_path):
         return FileResponse(thumbnail_path, filename=f"thumb_{img.filename}")
 
@@ -161,32 +151,28 @@ async def get_image_thumbnail(image_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/images/{image_id}/annotated")
-async def get_image_annotated(image_id: str, db: AsyncSession = Depends(get_db)):
-    """获取带检测框标注的图片"""
+async def get_image_annotated(
+    img: Image = Depends(get_owned_image),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取带检测框标注的图片。ownership 已校验。"""
     from fastapi.responses import StreamingResponse
     from app.models import RawNestDetection
-    from PIL import Image, ImageDraw
+    from PIL import Image as PILImage, ImageDraw
     import io
     import os
-
-    # 获取图片信息
-    service = UploadService(db)
-    img = await service.get_image(image_id)
-
-    if not img:
-        raise HTTPException(status_code=404, detail="图片不存在")
 
     if not os.path.exists(img.storage_path):
         raise HTTPException(status_code=404, detail="图片文件不存在")
 
     # 获取检测框数据
     result = await db.execute(
-        select(RawNestDetection).where(RawNestDetection.image_id == image_id)
+        select(RawNestDetection).where(RawNestDetection.image_id == str(img.id))
     )
     detections = result.scalars().all()
 
     # 打开原图
-    image = Image.open(img.storage_path)
+    image = PILImage.open(img.storage_path)
     draw = ImageDraw.Draw(image)
     width, height = image.size
 

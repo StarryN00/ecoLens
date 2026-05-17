@@ -1,12 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
+from app.api.deps import _is_owner_or_admin, get_owned_task
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models import UniqueNest, RawNestDetection, Image, ImageDetection
+from app.models import (
+    Image,
+    ImageDetection,
+    InspectionTask,
+    RawNestDetection,
+    UniqueNest,
+    User,
+)
 
 router = APIRouter(
     prefix="/api/v1",
@@ -17,14 +25,14 @@ router = APIRouter(
 
 @router.get("/tasks/{task_id}/nests")
 async def get_task_nests(
-    task_id: UUID,
     severity: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
+    task: InspectionTask = Depends(get_owned_task),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取任务的去重后虫巢列表"""
-    query = select(UniqueNest).where(UniqueNest.task_id == str(task_id))
+    """获取任务的去重后虫巢列表。ownership 已校验。"""
+    query = select(UniqueNest).where(UniqueNest.task_id == str(task.id))
 
     if severity:
         query = query.where(UniqueNest.severity == severity)
@@ -53,13 +61,35 @@ async def get_task_nests(
 
 
 @router.get("/nests/{nest_id}")
-async def get_nest_detail(nest_id: UUID, db: AsyncSession = Depends(get_db)):
-    """获取单个虫巢详情（包含来源图片）"""
-    result = await db.execute(select(UniqueNest).where(UniqueNest.id == nest_id))
-    nest = result.scalar_one_or_none()
+async def get_nest_detail(
+    nest_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单个虫巢详情（包含来源图片）。
 
-    if not nest:
-        raise HTTPException(status_code=404, detail="虫巢不存在")
+    ownership：unique_nests 没有 owner_id，靠 task_id 间接归属。
+    用 JOIN 一次性查 nest+task.owner_id，省一次 round-trip。
+    不存在 / 无权 都返回 404 + "虫巢不存在"。
+    """
+    not_found = HTTPException(status_code=404, detail="虫巢不存在")
+
+    result = await db.execute(
+        select(UniqueNest, InspectionTask.owner_id)
+        .join(
+            InspectionTask,
+            InspectionTask.id == UniqueNest.task_id,
+            isouter=True,
+        )
+        .where(UniqueNest.id == str(nest_id))
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise not_found
+
+    nest, owner_id = row
+    if not _is_owner_or_admin(current_user, owner_id):
+        raise not_found
 
     # 获取来源图片详情
     source_images_details = []
@@ -86,11 +116,14 @@ async def get_nest_detail(nest_id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/tasks/{task_id}/results")
-async def get_task_results(task_id: UUID, db: AsyncSession = Depends(get_db)):
-    """获取任务检测结果概览"""
+async def get_task_results(
+    task: InspectionTask = Depends(get_owned_task),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取任务检测结果概览。ownership 已校验。"""
     # 查询图片检测统计
     detection_result = await db.execute(
-        select(ImageDetection).where(ImageDetection.task_id == str(task_id))
+        select(ImageDetection).where(ImageDetection.task_id == str(task.id))
     )
     detections = detection_result.scalars().all()
 
@@ -106,12 +139,12 @@ async def get_task_results(task_id: UUID, db: AsyncSession = Depends(get_db)):
             func.count().filter(UniqueNest.severity == "severe").label("severe"),
             func.count().filter(UniqueNest.severity == "medium").label("medium"),
             func.count().filter(UniqueNest.severity == "light").label("light"),
-        ).where(UniqueNest.task_id == str(task_id))
+        ).where(UniqueNest.task_id == str(task.id))
     )
     nest_stats = nests_result.one()
 
     return {
-        "task_id": str(task_id),
+        "task_id": str(task.id),
         "image_stats": {
             "total_processed": len(detections),
             "with_camphor_tree": camphor_count,
@@ -128,30 +161,34 @@ async def get_task_results(task_id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/tasks/{task_id}/statistics")
-async def get_task_statistics(task_id: UUID, db: AsyncSession = Depends(get_db)):
-    """获取任务详细统计数据"""
+async def get_task_statistics(
+    task: InspectionTask = Depends(get_owned_task),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取任务详细统计数据。ownership 已校验。"""
+    task_id_str = str(task.id)
     # 查询图片统计
     img_result = await db.execute(
-        select(func.count(Image.id)).where(Image.task_id == str(task_id))
+        select(func.count(Image.id)).where(Image.task_id == task_id_str)
     )
     total_images = img_result.scalar() or 0
 
     # 查询GPS统计
     gps_result = await db.execute(
         select(func.count(Image.id)).where(
-            Image.task_id == task_id, Image.has_gps == True
+            Image.task_id == task_id_str, Image.has_gps == True
         )
     )
     gps_images = gps_result.scalar() or 0
 
     # 查询检测结果统计
     det_result = await db.execute(
-        select(ImageDetection).where(ImageDetection.task_id == str(task_id))
+        select(ImageDetection).where(ImageDetection.task_id == task_id_str)
     )
     detections = det_result.scalars().all()
 
     return {
-        "task_id": str(task_id),
+        "task_id": task_id_str,
         "image_statistics": {
             "total": total_images,
             "with_gps": gps_images,
