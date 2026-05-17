@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
@@ -49,6 +50,14 @@ class InspectionTask(Base):
     task_name = Column(String(200), nullable=False)
     area_name = Column(String(200))
     operator = Column(String(100))
+    # 资源 ownership：任务必须有创建者（M2 ownership enforcement）。
+    # 模型层 NOT NULL —— 对新库 init_db 直接建对；对存量库由
+    # scripts/add_missing_indexes.py 把现存任务回填给第一个 admin
+    # 后再 ALTER COLUMN（Postgres）/ 跳过约束（SQLite 不支持 ADD CONSTRAINT）。
+    owner_id = Column(
+        String(36), ForeignKey("users.id"), index=True, nullable=False
+    )
+    owner = relationship("User")
     status = Column(
         String(20), default="uploading"
     )  # uploading/processing/completed/failed
@@ -64,7 +73,10 @@ class Image(Base):
     __tablename__ = "images"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    task_id = Column(String(36), ForeignKey("inspection_tasks.id"))
+    # P1 #11：外键加索引，加速 WHERE task_id=? 和 IN (image_ids) 查询
+    task_id = Column(
+        String(36), ForeignKey("inspection_tasks.id"), index=True
+    )
     filename = Column(String(500), nullable=False)
     storage_path = Column(String(1000), nullable=False)
     latitude = Column(Float)
@@ -85,8 +97,11 @@ class ImageDetection(Base):
     __tablename__ = "image_detections"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    image_id = Column(String(36), ForeignKey("images.id"))
-    task_id = Column(String(36), ForeignKey("inspection_tasks.id"))
+    # P1 #11：外键加索引
+    image_id = Column(String(36), ForeignKey("images.id"), index=True)
+    task_id = Column(
+        String(36), ForeignKey("inspection_tasks.id"), index=True
+    )
     has_camphor_tree = Column(Boolean, default=False)
     has_nest = Column(Boolean, default=False)
     nest_count = Column(Integer, default=0)
@@ -102,8 +117,11 @@ class RawNestDetection(Base):
     __tablename__ = "raw_nest_detections"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    image_id = Column(String(36), ForeignKey("images.id"))
-    task_id = Column(String(36), ForeignKey("inspection_tasks.id"))
+    # P1 #11：外键加索引
+    image_id = Column(String(36), ForeignKey("images.id"), index=True)
+    task_id = Column(
+        String(36), ForeignKey("inspection_tasks.id"), index=True
+    )
     # 像素坐标(相对值0~1)
     bbox_x_center = Column(Float, nullable=False)
     bbox_y_center = Column(Float, nullable=False)
@@ -126,7 +144,10 @@ class UniqueNest(Base):
     __tablename__ = "unique_nests"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    task_id = Column(String(36), ForeignKey("inspection_tasks.id"))
+    # P1 #11：外键加索引
+    task_id = Column(
+        String(36), ForeignKey("inspection_tasks.id"), index=True
+    )
     nest_code = Column(String(50), nullable=False)  # NEST-20260307-001
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)

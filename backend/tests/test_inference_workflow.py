@@ -41,7 +41,28 @@ from app.models import (  # noqa: E402
     ImageDetection,
     InspectionTask,
     RawNestDetection,
+    User,
 )
+
+
+def _ensure_owner(db) -> str:
+    """确保 sync DB 里有一个 admin 用户，返回其 id。
+
+    M2 ownership 加固后，InspectionTask.owner_id 是 NOT NULL；这些
+    测试 fixture 用 sync engine 直接 insert，不走 API，因此需要在
+    插入 task 之前先准备一个用户行。"""
+    user = db.query(User).filter_by(username="_test_owner").one_or_none()
+    if user is None:
+        user = User(
+            username="_test_owner",
+            hashed_password="x",
+            is_active=True,
+            is_admin=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user.id
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +111,15 @@ class TestChordOrchestration:
         task_id = str(uuid.uuid4())
         image_ids = [str(uuid.uuid4()) for _ in range(3)]
         with SyncSessionLocal() as db:
-            db.add(InspectionTask(id=task_id, task_name="t", total_images=3))
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="t",
+                    total_images=3,
+                    owner_id=owner_id,
+                )
+            )
             for img_id in image_ids:
                 db.add(
                     Image(
@@ -154,7 +183,15 @@ class TestChordOrchestration:
         Base.metadata.create_all(sync_engine)
         task_id = str(uuid.uuid4())
         with SyncSessionLocal() as db:
-            db.add(InspectionTask(id=task_id, task_name="t", total_images=0))
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="t",
+                    total_images=0,
+                    owner_id=owner_id,
+                )
+            )
             db.commit()
 
         from app.tasks import inference_tasks as it
@@ -230,6 +267,7 @@ class TestProcessImageSyncSmoke:
         task_id = str(uuid.uuid4())
         image_id = str(uuid.uuid4())
         with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
             db.add(
                 InspectionTask(
                     id=task_id,
@@ -237,6 +275,7 @@ class TestProcessImageSyncSmoke:
                     total_images=1,
                     processed_images=0,
                     status="processing",
+                    owner_id=owner_id,
                 )
             )
             db.add(
