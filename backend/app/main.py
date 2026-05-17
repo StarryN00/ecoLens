@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -9,7 +11,13 @@ from app.api import tasks, images, nests, auth
 # 显式引入 models 以确保 SQLAlchemy 的 Base.metadata 在 init_db 时能创建 users 表
 from app import models  # noqa: F401
 
+logger = logging.getLogger(__name__)
+
 settings = get_settings()
+
+# 启动期把最终生效的 CORS 白名单打印出来，便于排查 "前端 CORS 失败" 的问题。
+# Settings 的 model_validator 已保证列表非空，这里只需打印。
+logger.info("CORS allowed origins: %s", settings.cors_origins_list)
 
 
 @asynccontextmanager
