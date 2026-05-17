@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from celery import chord, group, shared_task  # noqa: F401  (保留导出兼容)
 from celery.exceptions import MaxRetriesExceededError
+from celery.signals import worker_process_init
 from sqlalchemy import select
 
 from app.core.celery_app import celery_app
@@ -34,14 +35,49 @@ from app.utils.geo_utils import pixel_to_gps
 logger = logging.getLogger(__name__)
 
 
-# ---- 模型懒加载（commit #5 会换成 worker_process_init 预热）---------------
-# 这里先保持每次 new 一份的旧行为，下一个 commit 切到全局缓存。
+# ---- 模型预热 / 进程级缓存（见 #9）---------------------------------------
+# 每个 Celery worker 进程在启动时 fork 一次 _warmup_models()，把模型加载
+# 到进程级单例里；之后所有 task 复用，避免每张图都 new YOLO/Torch 模型。
+#
+# 注意：pytest 不会触发 worker_process_init，所以下面的 _get_xxx() 还保留
+# lazy fallback——首次调用就地实例化，并写回全局，后续测试也共享一份。
+# 模型类自身的 _load_model lazy 行为保持不动，是双重防御。
+_nest_detector: Optional[NestDetector] = None
+_tree_classifier: Optional[TreeClassifier] = None
+
+
+@worker_process_init.connect
+def _warmup_models(**_kwargs) -> None:  # pragma: no cover - worker-only
+    """Celery worker 子进程启动时一次性加载模型。"""
+    global _nest_detector, _tree_classifier
+    logger.info("worker_process_init: 预热推理模型")
+    try:
+        _nest_detector = NestDetector()
+    except Exception as exc:
+        logger.exception(f"NestDetector 预热失败: {exc}")
+        _nest_detector = None
+    try:
+        _tree_classifier = TreeClassifier()
+    except Exception as exc:
+        logger.exception(f"TreeClassifier 预热失败: {exc}")
+        _tree_classifier = None
+
+
 def _get_nest_detector() -> NestDetector:
-    return NestDetector()
+    """获取进程级 NestDetector；pytest / 任何未走 worker_process_init 的
+    场景下做 lazy 实例化（仅一次），保证测试也能跑。"""
+    global _nest_detector
+    if _nest_detector is None:
+        _nest_detector = NestDetector()
+    return _nest_detector
 
 
 def _get_tree_classifier() -> TreeClassifier:
-    return TreeClassifier()
+    """同 _get_nest_detector，进程级 TreeClassifier + lazy fallback。"""
+    global _tree_classifier
+    if _tree_classifier is None:
+        _tree_classifier = TreeClassifier()
+    return _tree_classifier
 
 
 # ---- 内部工具：把 detections 反算 GPS（不再走 GeoService 的 async 版） ----
