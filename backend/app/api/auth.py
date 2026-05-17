@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -48,7 +48,14 @@ class TokenResponse(BaseModel):
     status_code=status.HTTP_201_CREATED,
 )
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    """注册新用户。第一个注册的用户自动成为管理员以便初始化系统。"""
+    """注册新用户。
+
+    注意：本接口创建的用户均为普通用户（is_admin=False）。
+    管理员账号需要使用 `backend/scripts/create_admin.py` 离线 bootstrap，
+    避免之前 "count == 0 -> is_admin=True" 的 race condition（两个并发
+    注册请求都能读到 count==0，导致出现多个意外 admin）。
+    详见 backend/scripts/README.md。
+    """
     # 检查 username 冲突
     exists = await db.execute(select(User).where(User.username == payload.username))
     if exists.scalar_one_or_none() is not None:
@@ -66,17 +73,12 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
                 status_code=status.HTTP_409_CONFLICT, detail="邮箱已被使用"
             )
 
-    # 第一个用户自动设为 admin
-    count_result = await db.execute(select(func.count(User.id)))
-    user_count = count_result.scalar() or 0
-    is_admin = user_count == 0
-
     user = User(
         username=payload.username,
         email=payload.email,
         hashed_password=hash_password(payload.password),
         is_active=True,
-        is_admin=is_admin,
+        is_admin=False,
     )
     db.add(user)
     await db.commit()
