@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -14,8 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models import Image
+from app.services.camera_sensors import resolve_sensor_width
 from app.services.task_service import TaskService
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 # 上传校验常量
@@ -295,13 +299,15 @@ class UploadService:
                 except:
                     pass
 
-            # 传感器宽度(估算,常见值)
-            if "FocalPlaneXResolution" in exif_data:
-                # 这里简化处理,实际需要更复杂的计算
-                data["sensor_width"] = 13.2  # 默认常见值
+            # 传感器宽度：先用 FocalPlaneXResolution 真实换算，失败回退
+            # 到 Make/Model 机型表，都不命中则保持 None（GPS 反算会跳过这
+            # 张图）。**绝对不能**硬编 fallback 数值——错误的 sensor_width
+            # 会被下游 pixel_to_gps 当成真值用，污染虫巢坐标。
+            sensor_width, _source = resolve_sensor_width(exif_data, data["width"])
+            data["sensor_width"] = sensor_width
 
         except Exception as e:
-            print(f"解析EXIF失败: {e}")
+            logger.warning("解析EXIF失败: %s", e)
 
         return data
 
@@ -326,7 +332,7 @@ class UploadService:
                 return float(match.group(1))
 
         except Exception as e:
-            print(f"解析 XMP 高度失败: {e}")
+            logger.warning("解析 XMP 高度失败: %s", e)
 
         return None
 
@@ -344,4 +350,4 @@ class UploadService:
                 img.thumbnail(size)
                 img.save(thumbnail_path, "JPEG", quality=85)
         except Exception as e:
-            print(f"生成缩略图失败: {e}")
+            logger.warning("生成缩略图失败: %s", e)
