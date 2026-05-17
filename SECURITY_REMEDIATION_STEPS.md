@@ -63,7 +63,11 @@ git clone --mirror . /tmp/ecoLens-backup-$(date +%Y%m%d).git
 
 # 3. 在主仓库（不是 worktree）中执行历史重写
 cd /Users/starryn/project/ecoLens
-git filter-repo --path server.md --invert-paths --force
+git filter-repo \
+  --path server.md \
+  --path .env \
+  --path backend/.env \
+  --invert-paths --force
 
 # 4. 验证 server.md 已从所有历史中消失
 git log --all --oneline -- server.md   # 应该无输出
@@ -117,3 +121,36 @@ git push --force
 - 本次 HEAD 删除：2026-05-17（本 commit）
 - 服务器密码轮换：**待执行**
 - 历史重写 + 强推：**待执行**（由主对话流程协调）
+
+---
+
+## 已 untrack 的 .env 文件
+
+`.env` 和 `backend/.env` 在 Initial commit `327cb1d` 中被一并提交，
+内含 `SECRET_KEY` 等敏感配置。Team A 已在 `911d621` 把这两个路径加入
+`.gitignore`，但 **未把它们从 Git 索引移除**，因此 `git ls-files` 仍能列出。
+
+本 commit 用 `git rm --cached` 把它们从索引移除（本地文件保留供开发者继续使用）：
+
+```bash
+git rm --cached .env backend/.env
+```
+
+效果：
+- `.env`、`backend/.env` 不再被 Git 跟踪，后续 `git status` 不会显示其改动
+- 本地工作树中的文件未删除
+- **历史中仍然存在**：`git show 327cb1d:.env` 等仍可读出旧内容
+
+正式清理：参见上文 `git filter-repo` 命令，已在 `--path` 列表里追加 `.env`
+和 `backend/.env`，与 `server.md` 一并彻底从所有 commit 中抹除。
+
+### 配套动作（必做）
+1. **轮换 SECRET_KEY**：旧的 `SECRET_KEY` 必须视为泄露，所有签发过的 JWT
+   都应作废。重新生成并写入新的 `.env`：
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+2. **轮换数据库密码**：`backend/.env` 中的 `DATABASE_URL` 包含的 DB 密码
+   同样视为泄露，需在数据库侧修改并更新 `.env`。
+3. 在 filter-repo 完成、强推之前，**不要把任何新的敏感凭据再写进
+   tracked 的文件**。
