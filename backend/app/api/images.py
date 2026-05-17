@@ -27,9 +27,12 @@ async def upload_images(
     service = UploadService(db)
     results = await service.upload_images(task_id, files)
 
-    # 自动触发AI处理任务
+    # commit 已经发生在 upload_images 内部；把入库后的真实 image_id 列表
+    # 显式传给 trigger_task_processing，worker 端不再 SELECT Image 表
+    # （避免上传/触发之间的事务窗口里看到旧 total_images）。见 #6。
     if results:
-        trigger_task_processing.delay(task_id)
+        image_ids = [str(img["id"]) for img in results]
+        trigger_task_processing.delay(task_id, image_ids)
 
     return {
         "task_id": task_id,

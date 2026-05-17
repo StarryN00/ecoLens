@@ -56,7 +56,21 @@ class UploadService:
         Path(self.THUMBNAIL_DIR).mkdir(exist_ok=True, parents=True)
 
     async def upload_images(self, task_id: UUID, files: List) -> List[dict]:
-        """批量上传图片，含类型/大小/真实性校验"""
+        """批量上传图片，含类型/大小/真实性校验。
+
+        所有 Image 行先 add 进 session，**仅在最后一次性 commit**，并通过
+        UPDATE 把 total_images 一次性增加（不是循环 +1）。这样：
+
+          * Celery 端读到 total_images 时一定能看到全部入库的 image
+            （否则上传 + commit + Celery 拿到 task 的窗口里 total_images
+            还停留在中间值，会被 processed_images >= total_images 误判
+            为 "都处理完了"，提前触发去重；见 #6）
+          * 整个批次是 1 个事务，部分失败时不会留下幽灵半成品
+
+        返回 dict 中的 `id` 是写入 DB 后的真实 PK 字符串，调用方应该把
+        这批 id 显式传给 trigger_task_processing，避免 worker 再去
+        SELECT Image 表撞上未来插入的并发批次。
+        """
         if len(files) > MAX_FILES_PER_BATCH:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -64,7 +78,6 @@ class UploadService:
             )
 
         results = []
-        task_service = TaskService(self.db)
         batch_size_total = 0
 
         for file in files:
@@ -170,7 +183,13 @@ class UploadService:
                 }
             )
 
-            await task_service.increment_image_count(task_id)
+        # 一次性更新 total_images，再 commit。不要在循环里每张图都 +1 +
+        # commit —— 那样 trigger_task_processing 中间被 enqueue 看到的就
+        # 是个不一致的中间态（见 #6）。
+        if results:
+            task = await TaskService(self.db).get_task(task_id)
+            if task is not None:
+                task.total_images = (task.total_images or 0) + len(results)
 
         await self.db.commit()
         return results
