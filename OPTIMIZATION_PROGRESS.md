@@ -12,3 +12,4 @@ item; this file is its single source of truth.
 | #13 docker-compose 文件用途说明 | done | 1c0381b | 2026-05-18 |
 | #14 配置默认值会误连开发库 | done | bb6770d | 2026-05-18 |
 | #15 缺 lint/format/type 检查 | done | 80db582 | 2026-05-19 |
+| #16 测试覆盖只够 smoke | done | cbff250 | 2026-05-19 |
