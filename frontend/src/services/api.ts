@@ -55,6 +55,8 @@ export const authApi = {
   register: (data: { username: string; password: string; email?: string }) =>
     api.post('/api/v1/auth/register', data),
   getMe: () => api.get('/api/v1/auth/me'),
+  changePassword: (data: { old_password: string; new_password: string }) =>
+    api.post('/api/v1/auth/change-password', data),
 };
 
 // 任务相关API
