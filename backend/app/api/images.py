@@ -103,12 +103,20 @@ async def list_task_images(
 
 @router.get("/images/{image_id}")
 async def get_image_file(img: Image = Depends(get_owned_image)):
-    """获取图片文件（原图）。ownership 通过 get_owned_image 校验。"""
+    """获取图片文件（原图）。ownership 通过 get_owned_image 校验。
+
+    用 inline 而非 attachment：浏览器 / antd Image / blob URL 流程都把它
+    当成图片直接渲染；attachment 会让某些场景下被当作下载提示，行为不一致。
+    """
     from fastapi.responses import FileResponse
     import os
 
     if os.path.exists(img.storage_path):
-        return FileResponse(img.storage_path, filename=img.filename)
+        return FileResponse(
+            img.storage_path,
+            filename=img.filename,
+            content_disposition_type="inline",
+        )
 
     raise HTTPException(status_code=404, detail="图片文件不存在")
 
@@ -141,11 +149,19 @@ async def get_image_thumbnail(img: Image = Depends(get_owned_image)):
 
     thumbnail_path = f"./thumbnails/{img.id}.jpg"
     if os.path.exists(thumbnail_path):
-        return FileResponse(thumbnail_path, filename=f"thumb_{img.filename}")
+        return FileResponse(
+            thumbnail_path,
+            filename=f"thumb_{img.filename}",
+            content_disposition_type="inline",
+        )
 
     # 缩略图不存在，返回原图
     if os.path.exists(img.storage_path):
-        return FileResponse(img.storage_path, filename=img.filename)
+        return FileResponse(
+            img.storage_path,
+            filename=img.filename,
+            content_disposition_type="inline",
+        )
 
     raise HTTPException(status_code=404, detail="图片文件不存在")
 
