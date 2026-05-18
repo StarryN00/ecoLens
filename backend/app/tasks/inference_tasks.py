@@ -365,14 +365,15 @@ def trigger_processing_sync(
         process_task_deduplication.delay(task_id)
         return {"status": "triggered", "task_id": task_id, "images": 0}
 
-    # chord(header)(callback)：header 全部成功后才执行 callback；
-    # 失败由 process_task_deduplication 内部统一处理（见 #7）。
-    # process_task_deduplication.si(task_id)：immutable signature，
-    # 不会把 header 的返回值塞进 args。
+    # chord(header)(callback)：M1 之后 process_image_task 不再在重试耗尽时
+    # raise，而是返回 {"status": "failed", ...} dict，由 chord 把结果列表
+    # 透传给 callback。callback 检查列表里有没有 failed 项决定后续动作。
+    # 这里用 `.s(task_id)`（不是 `.si`），让 chord 把 header 结果作为
+    # 第一个位置参数注入到 process_task_deduplication(results, task_id)。
     header = group(
         process_image_task.s(task_id, image_id) for image_id in resolved_ids
     )
-    callback = process_task_deduplication.si(task_id)
+    callback = process_task_deduplication.s(task_id)
     chord(header)(callback)
 
     logger.info(f"已发起 chord: task_id={task_id}, header_size={len(resolved_ids)}")
@@ -384,7 +385,14 @@ def trigger_processing_sync(
 # ---------------------------------------------------------------------------
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def process_image_task(self, task_id: str, image_id: str):
-    """处理单张图片（Celery 入口）"""
+    """处理单张图片（Celery 入口）。
+
+    M1：重试耗尽时**不再 raise**，而是返回失败 dict。Celery chord 只在
+    所有 header 成功（即不 raise）时才会调度 callback；之前的 raise
+    会让 callback 永远拿不到、task.status 永远卡 'processing'。
+    现在 header 始终返回 dict，callback (process_task_deduplication)
+    自己根据返回值判断是否标记任务失败。
+    """
     try:
         return process_image_sync(task_id, image_id)
     except Exception as exc:
@@ -393,20 +401,72 @@ def process_image_task(self, task_id: str, image_id: str):
             self.retry(exc=exc)
         except MaxRetriesExceededError:
             logger.error(f"达到最大重试次数: image_id={image_id}")
-            raise
+            # 关键：不再 raise，返回 failed dict 让 chord 视为成功完成，
+            # callback 拿到完整 header 结果列表后再决定整体任务状态。
+            return {
+                "status": "failed",
+                "task_id": task_id,
+                "image_id": image_id,
+                "error": str(exc),
+            }
 
 
 @celery_app.task
-def process_task_deduplication(task_id: str):
+def process_task_deduplication(results=None, task_id: Optional[str] = None):
     """任务级去重（Celery 入口）。
 
-    被 chord(header)(callback) 调用。如果 header 里任一 process_image_task
-    最终失败，Celery 仍会把 callback 投递过来（取决于 broker 行为），
-    更重要的是去重本身可能出错。两种情况都把 task.status 改成 failed
-    并把原因写到一个 InspectionTask 上能记录的字段——当前模型没有专门
-    的 error 字段，所以只能写日志 + 状态码，让 API 层看到 failed 时拉日志。
+    被 chord(header)(callback) 调用，签名约定：第一个位置参数 `results`
+    是 chord header 的返回值列表，每项是 process_image_task 返回的 dict。
+    `task_id` 通过 `.s(task_id)` 绑定。
+
+    流程：
+    1. 扫描 results 看是否有 failed 项；有就 mark task=failed 并直接返回
+       （不去重——本来就缺数据），避免 task.status 永远停在 'processing'
+    2. 否则调用 deduplicate_task_sync 走正常去重路径
+    3. 直接 .delay() 兜底调用（results=None）仍兼容：跳过 results 检查
+
+    M1 fix：之前用 `.si(task_id)` 不传 header 结果，任何一张图 raise
+    都会导致 callback 不被调度，task 永远卡 'processing'；现在 worker
+    始终返回 dict（见 process_image_task），callback 显式处理失败计数。
     """
-    logger.info(f"开始任务去重: task_id={task_id}")
+    logger.info(
+        f"开始任务去重: task_id={task_id}, header_results={None if results is None else len(results)}"
+    )
+
+    # 兜底容错：当被 .delay(task_id) 直接调用（无 image 场景）时，
+    # results 会变成 task_id 字符串。把它纠正过来。
+    if isinstance(results, str) and task_id is None:
+        task_id = results
+        results = None
+
+    if task_id is None:
+        logger.error("process_task_deduplication 缺少 task_id 参数")
+        return {"status": "failed", "error": "missing task_id"}
+
+    # 1) 先看 header 里有没有失败项
+    if results:
+        failed = [
+            r for r in results
+            if isinstance(r, dict) and r.get("status") == "failed"
+        ]
+        if failed:
+            logger.warning(
+                "Task %s: %d/%d images failed processing, marking task as failed",
+                task_id,
+                len(failed),
+                len(results),
+            )
+            _mark_task_failed(
+                task_id, reason=f"{len(failed)} image(s) failed processing"
+            )
+            return {
+                "status": "failed",
+                "task_id": task_id,
+                "failed_count": len(failed),
+                "total": len(results),
+            }
+
+    # 2) 正常去重
     try:
         return deduplicate_task_sync(task_id)
     except Exception as exc:

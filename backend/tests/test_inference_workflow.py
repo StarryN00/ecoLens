@@ -3,10 +3,12 @@
 覆盖：
   * _to_sync_url 转换正确性（sqlite / postgresql / 已经 sync 的）
   * Celery chord 编排：trigger_processing_sync 是否用 chord(group(...))
-    + process_task_deduplication.si(task_id) 起的
+    + process_task_deduplication.s(task_id) 起的（M1：从 .si 改为 .s，
+    把 header 结果列表传给 callback）
   * worker_process_init 信号上是否挂了预热回调
   * 端到端冒烟（SQLite）：process_image_sync 在模型返回空 detections 时
     不写 raw_nest_detections，写入 image_detections，processed_images +1
+  * M1：callback 看到 header results 含 failed 项时把 task 标记为 failed
 """
 
 import io
@@ -103,9 +105,13 @@ class TestSyncUrlConverter:
 # #7: Celery chord 编排
 # ---------------------------------------------------------------------------
 class TestChordOrchestration:
-    def test_trigger_uses_chord_with_si_callback(self, tmp_path, monkeypatch):
-        """trigger_processing_sync 应该用 chord(group(...))(callback.si)
-        启动一组 process_image_task。"""
+    def test_trigger_uses_chord_with_s_callback(self, tmp_path, monkeypatch):
+        """trigger_processing_sync 应该用 chord(group(...))(callback.s(task_id))
+        启动一组 process_image_task。
+
+        M1 之后改用 .s(task_id) 而非 .si(task_id)，目的是把 header
+        的返回值列表透传给 callback，让 callback 能感知失败。
+        """
         # 准备：往 sync DB 里插一个 task + 3 张图
         Base.metadata.create_all(sync_engine)
         task_id = str(uuid.uuid4())
@@ -135,14 +141,18 @@ class TestChordOrchestration:
 
         captured = {}
 
-        def fake_s(self_or_task_id, *args):
-            # 兼容被当 staticmethod-like 调用：把 args/kwargs 都收着
-            captured.setdefault("s_calls", []).append((self_or_task_id, args))
-            return ("S", self_or_task_id, args)
+        # 注意：fake_s 既会被绑到 process_image_task.s（header），
+        # 也会被绑到 process_task_deduplication.s（callback）。
+        # 通过 captured 标记区分。
+        def fake_image_s(self_or_task_id, *args):
+            captured.setdefault("header_s_calls", []).append(
+                (self_or_task_id, args)
+            )
+            return ("HEADER_S", self_or_task_id, args)
 
-        def fake_si(task_id):
-            captured["si"] = task_id
-            return ("SI", task_id)
+        def fake_callback_s(task_id):
+            captured["callback_s"] = task_id
+            return ("CALLBACK_S", task_id)
 
         def fake_chord(header):
             captured["chord_header"] = list(header)
@@ -153,8 +163,8 @@ class TestChordOrchestration:
             return _apply
 
         # group 透传 header iter
-        monkeypatch.setattr(it.process_image_task, "s", fake_s)
-        monkeypatch.setattr(it.process_task_deduplication, "si", fake_si)
+        monkeypatch.setattr(it.process_image_task, "s", fake_image_s)
+        monkeypatch.setattr(it.process_task_deduplication, "s", fake_callback_s)
         monkeypatch.setattr(it, "chord", fake_chord)
         monkeypatch.setattr(it, "group", lambda gen: list(gen))
 
@@ -164,16 +174,16 @@ class TestChordOrchestration:
         assert result["images"] == 3
 
         # 3 张图 -> 3 个 process_image_task.s 调用
-        assert len(captured["s_calls"]) == 3
+        assert len(captured["header_s_calls"]) == 3
         for (passed_task, passed_args), expected_img in zip(
-            captured["s_calls"], image_ids
+            captured["header_s_calls"], image_ids
         ):
             assert passed_task == task_id
             assert passed_args == (expected_img,)
 
-        # callback 是 process_task_deduplication.si(task_id)
-        assert captured["si"] == task_id
-        assert captured["chord_callback"] == ("SI", task_id)
+        # callback 现在用 .s(task_id)
+        assert captured["callback_s"] == task_id
+        assert captured["chord_callback"] == ("CALLBACK_S", task_id)
 
         # chord header 由 fake_chord 接收并被 fake_group 物化为 list
         assert len(captured["chord_header"]) == 3
@@ -211,6 +221,118 @@ class TestChordOrchestration:
         result = it.trigger_processing_sync(task_id, image_ids=[])
         assert result["images"] == 0
         assert captured["delay"] == task_id
+
+
+# ---------------------------------------------------------------------------
+# M1: chord callback 透传 header 失败 → 任务状态置 failed
+# ---------------------------------------------------------------------------
+class TestCallbackHandlesHeaderFailures:
+    """process_task_deduplication 现在接收 header 结果列表。
+    任何一项是 {"status": "failed", ...} 就把 task 标 failed，
+    不再卡在 'processing'。"""
+
+    def test_callback_marks_task_failed_when_any_image_failed(self):
+        from app.tasks import inference_tasks as it
+
+        Base.metadata.create_all(sync_engine)
+        task_id = str(uuid.uuid4())
+        with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="m1-failed",
+                    total_images=2,
+                    processed_images=2,
+                    status="processing",
+                    owner_id=owner_id,
+                )
+            )
+            db.commit()
+
+        results = [
+            {"status": "failed", "task_id": task_id, "image_id": "x", "error": "boom"},
+            {"status": "success", "task_id": task_id, "image_id": "y"},
+        ]
+
+        out = it.process_task_deduplication(results, task_id)
+        assert out["status"] == "failed"
+        assert out["failed_count"] == 1
+        assert out["total"] == 2
+
+        with SyncSessionLocal() as db:
+            task = db.query(InspectionTask).filter_by(id=task_id).one()
+        assert task.status == "failed"
+
+    def test_callback_runs_dedup_when_all_success(self, monkeypatch):
+        """所有 header 都成功时，callback 应该走正常去重路径。"""
+        from app.tasks import inference_tasks as it
+
+        Base.metadata.create_all(sync_engine)
+        task_id = str(uuid.uuid4())
+        with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="m1-success",
+                    total_images=1,
+                    processed_images=1,
+                    status="processing",
+                    owner_id=owner_id,
+                )
+            )
+            db.commit()
+
+        # 用 stub 替掉真正的去重，避免依赖空 raw_nest_detections 的行为
+        called = {}
+
+        def fake_dedup(tid):
+            called["task_id"] = tid
+            return {"status": "success", "task_id": tid, "unique_nests": 0}
+
+        monkeypatch.setattr(it, "deduplicate_task_sync", fake_dedup)
+
+        results = [{"status": "success", "task_id": task_id, "image_id": "a"}]
+        out = it.process_task_deduplication(results, task_id)
+        assert out["status"] == "success"
+        assert called["task_id"] == task_id
+
+    def test_callback_backwards_compat_with_delay_no_images(self, monkeypatch):
+        """trigger_processing_sync 在没有任何图片时 .delay(task_id) 直接
+        触发去重收尾——此时 Celery 把 task_id 作为第一个位置参数传入，
+        即 results=task_id, task_id=None。callback 必须兼容。"""
+        from app.tasks import inference_tasks as it
+
+        Base.metadata.create_all(sync_engine)
+        task_id = str(uuid.uuid4())
+        with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="m1-no-images",
+                    total_images=0,
+                    processed_images=0,
+                    status="processing",
+                    owner_id=owner_id,
+                )
+            )
+            db.commit()
+
+        called = {}
+
+        def fake_dedup(tid):
+            called["task_id"] = tid
+            return {"status": "success", "task_id": tid, "unique_nests": 0}
+
+        monkeypatch.setattr(it, "deduplicate_task_sync", fake_dedup)
+
+        # 模拟 .delay(task_id) 直接调用，Celery 把它当成
+        # process_task_deduplication(task_id) -> results=task_id, task_id=None
+        out = it.process_task_deduplication(task_id)
+        assert out["status"] == "success"
+        assert called["task_id"] == task_id
 
 
 # ---------------------------------------------------------------------------
