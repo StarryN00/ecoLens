@@ -324,3 +324,212 @@ class TestProcessImageSyncSmoke:
         assert dets[0].model_version == "v1.0"
         # processed_images +1
         assert task.processed_images == 1
+
+
+# ---------------------------------------------------------------------------
+# B1: _attach_gps_to_detections 在 EXIF 缺失时必须跳过 GPS 反算
+# ---------------------------------------------------------------------------
+class TestAttachGpsExifGuard:
+    """worker 不得把 None 的 sensor_width 等字段 fallback 成硬编码常量，
+    否则 #10 的"未知机型跳过 GPS 反算"设计会被绕过。"""
+
+    def test_skips_when_sensor_width_missing(self):
+        from app.tasks import inference_tasks as it
+
+        # 模拟一张 has_gps=True 但 sensor_width=None 的图（未知机型）
+        class _Img:
+            id = "img-no-sensor"
+            has_gps = True
+            image_width = 4000
+            image_height = 3000
+            altitude = 50.0
+            focal_length = 24.0
+            sensor_width = None
+            latitude = 31.0
+            longitude = 121.0
+
+        dets = [
+            {
+                "bbox_center": [0.5, 0.5],
+                "bbox_width": 0.1,
+                "bbox_height": 0.1,
+                "confidence": 0.9,
+                "severity": "medium",
+            }
+        ]
+        out = it._attach_gps_to_detections(dets, _Img())
+        # 必须不写 geo_latitude/geo_longitude（即缺省，None）
+        assert len(out) == 1
+        assert out[0].get("geo_latitude") is None
+        assert out[0].get("geo_longitude") is None
+
+    def test_full_exif_produces_geo_coords(self):
+        from app.tasks import inference_tasks as it
+
+        class _Img:
+            id = "img-full-exif"
+            has_gps = True
+            image_width = 4000
+            image_height = 3000
+            altitude = 50.0
+            focal_length = 24.0
+            sensor_width = 13.2
+            latitude = 31.0
+            longitude = 121.0
+
+        dets = [
+            {
+                "bbox_center": [0.6, 0.4],
+                "bbox_width": 0.1,
+                "bbox_height": 0.1,
+                "confidence": 0.9,
+                "severity": "medium",
+            }
+        ]
+        out = it._attach_gps_to_detections(dets, _Img())
+        assert len(out) == 1
+        assert out[0]["geo_latitude"] is not None
+        assert out[0]["geo_longitude"] is not None
+        # 非 0 偏移 -> 必然不等于拍摄点本身
+        assert out[0]["geo_latitude"] != 31.0 or out[0]["geo_longitude"] != 121.0
+
+    def test_end_to_end_missing_exif_writes_null_geo(self, tmp_path, monkeypatch):
+        """跑一遍完整 process_image_sync：缺 sensor_width 时
+        raw_nest_detections.geo_latitude 必须为 None。"""
+        from app.tasks import inference_tasks as it
+
+        img_path = tmp_path / "no_sensor.jpg"
+        PILImage.new("RGB", (1, 1), color="white").save(img_path, "JPEG")
+
+        task_id = str(uuid.uuid4())
+        image_id = str(uuid.uuid4())
+        with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="exif-missing",
+                    total_images=1,
+                    processed_images=0,
+                    status="processing",
+                    owner_id=owner_id,
+                )
+            )
+            db.add(
+                Image(
+                    id=image_id,
+                    task_id=task_id,
+                    filename="no_sensor.jpg",
+                    storage_path=str(img_path),
+                    has_gps=True,
+                    latitude=31.0,
+                    longitude=121.0,
+                    altitude=50.0,
+                    focal_length=24.0,
+                    sensor_width=None,  # 未知机型
+                    image_width=4000,
+                    image_height=3000,
+                )
+            )
+            db.commit()
+
+        class _StubDetector:
+            def detect(self, _path):
+                return [
+                    {
+                        "bbox_center": [0.5, 0.5],
+                        "bbox_width": 0.1,
+                        "bbox_height": 0.1,
+                        "confidence": 0.9,
+                        "severity": "medium",
+                    }
+                ]
+
+        class _StubClassifier:
+            def classify(self, _path):
+                import numpy as np
+
+                return False, 0.0, np.zeros((1, 1), dtype="uint8")
+
+        monkeypatch.setattr(it, "_nest_detector", _StubDetector())
+        monkeypatch.setattr(it, "_tree_classifier", _StubClassifier())
+
+        result = it.process_image_sync(task_id, image_id)
+        assert result["status"] == "success"
+
+        with SyncSessionLocal() as db:
+            raws = db.query(RawNestDetection).filter_by(image_id=image_id).all()
+
+        assert len(raws) == 1
+        assert raws[0].geo_latitude is None
+        assert raws[0].geo_longitude is None
+
+    def test_end_to_end_full_exif_writes_geo(self, tmp_path, monkeypatch):
+        """跑一遍完整 process_image_sync：EXIF 齐全时 geo_* 必须算出非 None。"""
+        from app.tasks import inference_tasks as it
+
+        img_path = tmp_path / "full_exif.jpg"
+        PILImage.new("RGB", (1, 1), color="white").save(img_path, "JPEG")
+
+        task_id = str(uuid.uuid4())
+        image_id = str(uuid.uuid4())
+        with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="exif-full",
+                    total_images=1,
+                    processed_images=0,
+                    status="processing",
+                    owner_id=owner_id,
+                )
+            )
+            db.add(
+                Image(
+                    id=image_id,
+                    task_id=task_id,
+                    filename="full_exif.jpg",
+                    storage_path=str(img_path),
+                    has_gps=True,
+                    latitude=31.0,
+                    longitude=121.0,
+                    altitude=50.0,
+                    focal_length=24.0,
+                    sensor_width=13.2,
+                    image_width=4000,
+                    image_height=3000,
+                )
+            )
+            db.commit()
+
+        class _StubDetector:
+            def detect(self, _path):
+                return [
+                    {
+                        "bbox_center": [0.6, 0.4],
+                        "bbox_width": 0.1,
+                        "bbox_height": 0.1,
+                        "confidence": 0.9,
+                        "severity": "medium",
+                    }
+                ]
+
+        class _StubClassifier:
+            def classify(self, _path):
+                import numpy as np
+
+                return False, 0.0, np.zeros((1, 1), dtype="uint8")
+
+        monkeypatch.setattr(it, "_nest_detector", _StubDetector())
+        monkeypatch.setattr(it, "_tree_classifier", _StubClassifier())
+
+        result = it.process_image_sync(task_id, image_id)
+        assert result["status"] == "success"
+
+        with SyncSessionLocal() as db:
+            raws = db.query(RawNestDetection).filter_by(image_id=image_id).all()
+
+        assert len(raws) == 1
+        assert raws[0].geo_latitude is not None
+        assert raws[0].geo_longitude is not None

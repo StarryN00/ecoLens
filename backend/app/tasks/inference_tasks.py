@@ -86,8 +86,34 @@ def _attach_gps_to_detections(
 ) -> List[Dict[str, Any]]:
     """同步版坐标反算。GeoService.convert_detection_to_gps 是 async，
     Worker 里直接用底层 pixel_to_gps 完成同样的逻辑，避免再绕回 async。
+
+    严格遵守 #10 的设计：只有 EXIF 五要素（image_width/image_height/
+    altitude/focal_length/sensor_width）齐全时才反算 GPS；任何一项缺失
+    （例如未知机型的 sensor_width=None）就跳过坐标反算，detections
+    保留原始 pixel 信息，geo_latitude/geo_longitude 留空，让下游的去重
+    阶段（dedup_utils 已经过滤 geo_* 为 None 的记录）自然忽略。
     """
     if not detections or not image.has_gps:
+        return detections
+
+    required = (
+        image.image_width,
+        image.image_height,
+        image.altitude,
+        image.focal_length,
+        image.sensor_width,
+    )
+    if any(v is None for v in required):
+        logger.warning(
+            "Skipping GPS reverse projection for image %s: missing EXIF "
+            "(width=%s, height=%s, alt=%s, focal=%s, sensor_width=%s)",
+            image.id,
+            image.image_width,
+            image.image_height,
+            image.altitude,
+            image.focal_length,
+            image.sensor_width,
+        )
         return detections
 
     out: List[Dict[str, Any]] = []
@@ -96,13 +122,13 @@ def _attach_gps_to_detections(
         lat, lon = pixel_to_gps(
             pixel_x=bbox_center[0],
             pixel_y=bbox_center[1],
-            image_width=image.image_width or 4000,
-            image_height=image.image_height or 3000,
+            image_width=image.image_width,
+            image_height=image.image_height,
             photo_lat=image.latitude,
             photo_lon=image.longitude,
-            altitude=image.altitude or 50,
-            focal_length=image.focal_length or 24,
-            sensor_width=image.sensor_width or 13.2,
+            altitude=image.altitude,
+            focal_length=image.focal_length,
+            sensor_width=image.sensor_width,
         )
         new_det = dict(det)
         new_det["geo_latitude"] = lat
