@@ -10,14 +10,14 @@ class Settings(BaseSettings):
     APP_NAME: str = "樟巢螟智能检测系统"
     DEBUG: bool = True
 
-    # 数据库
-    DATABASE_URL: str = "postgresql+asyncpg://nestuser:nestpass@localhost:5432/nestdb"
+    # 数据库 — 无默认值：必须通过环境变量显式配置，防止生产环境误连本地库
+    DATABASE_URL: str
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # Celery - 使用SQLite作为broker（本地开发模式）
-    CELERY_BROKER_URL: str = "sqla+sqlite:///celerydb.sqlite"
+    # Celery — CELERY_BROKER_URL 无默认值，防止生产环境误用 SQLite broker
+    CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str = "db+sqlite:///celerydb.sqlite"
 
     # 文件存储

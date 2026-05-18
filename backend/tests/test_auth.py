@@ -6,6 +6,7 @@ import uuid
 # 测试前必须设置必填配置，且要在 import app 之前
 os.environ.setdefault("SECRET_KEY", "test-secret-key-only-for-pytest-DO-NOT-USE")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_auth.sqlite")
+os.environ.setdefault("CELERY_BROKER_URL", "sqla+sqlite:///./test_celerydb.sqlite")
 os.environ.setdefault(
     "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"
 )

@@ -18,6 +18,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-only-for-pytest-DO-NOT-USE"
 os.environ.setdefault(
     "DATABASE_URL", "sqlite+aiosqlite:///./test_ownership.sqlite"
 )
+os.environ.setdefault("CELERY_BROKER_URL", "sqla+sqlite:///./test_celerydb.sqlite")
 os.environ.setdefault(
     "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"
 )
