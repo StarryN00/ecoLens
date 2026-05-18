@@ -42,6 +42,15 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -117,3 +126,27 @@ async def login(
 async def get_me(current_user: User = Depends(get_current_user)):
     """获取当前登录用户信息"""
     return current_user
+
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """登录用户修改自己的密码。
+
+    流程：校验 old_password → 不匹配返回 401 → 匹配则写入新哈希并提交。
+    错误返回 401（与登录失败语义一致：凭证错误）；不主动 invalidate 现有
+    JWT（无 server-side session 表），调用方应在前端 logout 后让用户重登。
+    """
+    if not verify_password(payload.old_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="原密码错误",
+        )
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.add(current_user)
+    await db.commit()
+    return MessageResponse(message="密码修改成功")

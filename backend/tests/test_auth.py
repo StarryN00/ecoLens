@@ -113,3 +113,61 @@ def test_health_still_open(client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json()["status"] == "healthy"
+
+
+def _register_and_login(client, user):
+    r = client.post("/api/v1/auth/register", json=user)
+    assert r.status_code == 201, r.text
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": user["username"], "password": user["password"]},
+    )
+    assert login.status_code == 200, login.text
+    return login.json()["access_token"]
+
+
+def test_change_password_success_then_login_with_new(client, unique_user):
+    """改密成功后：新密码可登录，旧密码 401"""
+    token = _register_and_login(client, unique_user)
+
+    new_password = "NewPassw0rd!"
+    r = client.post(
+        "/api/v1/auth/change-password",
+        json={"old_password": unique_user["password"], "new_password": new_password},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # 旧密码登录失败
+    old_login = client.post(
+        "/api/v1/auth/login",
+        data={"username": unique_user["username"], "password": unique_user["password"]},
+    )
+    assert old_login.status_code == 401
+
+    # 新密码登录成功
+    new_login = client.post(
+        "/api/v1/auth/login",
+        data={"username": unique_user["username"], "password": new_password},
+    )
+    assert new_login.status_code == 200, new_login.text
+    assert new_login.json()["access_token"]
+
+
+def test_change_password_wrong_old_returns_401(client, unique_user):
+    """原密码不匹配应该返回 401，且密码不被修改"""
+    token = _register_and_login(client, unique_user)
+
+    r = client.post(
+        "/api/v1/auth/change-password",
+        json={"old_password": "definitely-wrong", "new_password": "AnotherPwd1!"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 401
+
+    # 原密码仍然可登录（没被改）
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": unique_user["username"], "password": unique_user["password"]},
+    )
+    assert login.status_code == 200
