@@ -1,5 +1,19 @@
 # 生产环境部署指南
 
+## 选哪个 docker-compose 文件？
+
+本仓库有三个 Compose 文件，各有明确用途：
+
+| 文件 | 用途 | 数据库 | 适用场景 |
+|------|------|--------|----------|
+| `docker-compose.yml` | **本地开发** | PostgreSQL（硬编码密码） | 开发者本机，uvicorn `--reload` + `npm run dev` 热重载 |
+| `docker-compose.prod.yml` | **完整生产部署** | PostgreSQL（读取 `.env`），可选 Nginx | 云服务器 / 多核机器，`--profile with-nginx` 启用反向代理 |
+| `docker-compose.server.yml` | **轻量单机部署** | SQLite（无需独立 PG 容器） | 内存/磁盘受限的单台服务器，快速验证 |
+
+> **常见选择**：本地开发用 `docker-compose.yml`；正式上线用 `docker-compose.prod.yml`（需先配置 `.env`）。
+
+---
+
 ## 快速开始
 
 ### 1. 准备环境
