@@ -46,3 +46,14 @@ Thumbs.db
 !.env.example
 !.env.sample
 
+# 本地服务器凭据（SSH key / IP / 用户名）
+server/
+*.pem
+
+# 大体积示例资产（不入仓，挪到 Release/OSS）
+result_*.jpg
+test_*.jpg
+test9_result.jpg
+test_annotated.jpg
+pics/
+
