@@ -8,4 +8,5 @@ item; this file is its single source of truth.
 
 | Item | Status | Commit | Date |
 |------|--------|--------|------|
-| #12 仓库 27.8MB JPG untrack | done | (pending push) | 2026-05-18 |
+| #12 仓库 27.8MB JPG untrack | done | 3807949 | 2026-05-18 |
+| #13 docker-compose 文件用途说明 | done | 1c0381b | 2026-05-18 |
