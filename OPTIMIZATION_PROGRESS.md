@@ -18,3 +18,4 @@ item; this file is its single source of truth.
 | #19 长任务进度刷新 | done | 402439e | 2026-05-19 |
 | #20 切片推理未启用 | done | 153f291 | 2026-05-19 |
 | #21 best.pt 双模型混用 | done | d4cf646 | 2026-05-19 |
+| #22 零可观测性 | done | e1f0302 | 2026-05-19 |
