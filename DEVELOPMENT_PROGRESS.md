@@ -31,4 +31,4 @@ Verdict flow per task:
 
 | Task | Status | Commit | Date | Notes |
 |------|--------|--------|------|-------|
-| (no work yet) | — | — | — | LaunchAgent will populate this |
+| T4 | in_review | 415bc89 | 2026-05-19 | 后端+前端统一红色宽5边框 |
