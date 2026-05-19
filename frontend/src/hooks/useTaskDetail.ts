@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { taskApi } from '../services/api';
 import type { Task, TaskResults, Nest, TaskImage } from '../types/task';
+
+const POLL_INTERVAL_MS = 4000;
+const ACTIVE_STATUSES = new Set(['uploading', 'processing']);
 
 interface UseTaskDetailResult {
   task: Task | null;
@@ -19,8 +22,17 @@ export function useTaskDetail(id: string): UseTaskDetailResult {
   const [images, setImages] = useState<TaskImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
   const refetch = useCallback(async () => {
+    stopPolling();
     setLoading(true);
     setError(null);
     try {
@@ -39,11 +51,31 @@ export function useTaskDetail(id: string): UseTaskDetailResult {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, stopPolling]);
 
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Poll status while task is in a non-terminal state
+  useEffect(() => {
+    if (!task || !ACTIVE_STATUSES.has(task.status)) return;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await taskApi.getTaskStatus(id);
+        setTask(prev => prev ? { ...prev, ...status } : prev);
+        if (!ACTIVE_STATUSES.has(status.status)) {
+          stopPolling();
+          refetch();
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    }, POLL_INTERVAL_MS);
+
+    return stopPolling;
+  }, [id, task?.status, stopPolling, refetch]);
 
   return { task, results, nests, images, loading, error, refetch };
 }

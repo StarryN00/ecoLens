@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Descriptions, Row, Col, Statistic, Progress, Button, message } from 'antd';
+import { Card, Descriptions, Row, Col, Statistic, Progress, Button, message, Typography } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import type { Task, TaskResults } from '../../types/task';
 import { getStatusTag } from './taskUtils';
@@ -10,7 +10,11 @@ interface Props {
   loading: boolean;
 }
 
+const { Text } = Typography;
+
 const TaskOverview: React.FC<Props> = ({ task, results, loading }) => {
+  const isActive = task.status === 'processing' || task.status === 'uploading';
+
   const exportReport = () => {
     message.info('报告导出功能开发中...');
   };
@@ -49,6 +53,11 @@ const TaskOverview: React.FC<Props> = ({ task, results, loading }) => {
               status={task.status === 'completed' ? 'success' : 'active'}
               format={(percent) => `${percent}%`}
             />
+            {isActive && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                推理进行中，每 4 秒自动刷新
+              </Text>
+            )}
           </Col>
           <Col span={6}>
             <Statistic title="状态" value={task.status === 'completed' ? '完成' : '处理中'} />

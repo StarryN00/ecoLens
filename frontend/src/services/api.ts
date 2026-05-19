@@ -91,6 +91,7 @@ export const taskApi = {
   getTaskResults: (id: string) => api.get(`/api/v1/tasks/${id}/results`),
   getTaskNests: (id: string) => api.get(`/api/v1/tasks/${id}/nests`),
   getTaskImages: (id: string) => api.get(`/api/v1/tasks/${id}/images`),
+  getTaskStatus: (id: string) => api.get(`/api/v1/tasks/${id}/status`),
   getTaskStatistics: (id: string) => api.get(`/api/v1/tasks/${id}/statistics`),
   getNestDetail: (id: string) => api.get(`/api/v1/nests/${id}`),
 };
