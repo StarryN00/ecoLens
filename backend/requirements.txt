@@ -22,6 +22,7 @@ geoalchemy2==0.14.2
 # 修了 DoS 路径，所以这里直接 pin 到 3.5.0（PyPI 当前最新 3.x）。
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # passlib 1.7.4 与 bcrypt 5.x 不兼容，必须锁 4.x
 email-validator==2.1.0
 
 # AI推理依赖
