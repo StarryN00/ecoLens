@@ -13,3 +13,4 @@ item; this file is its single source of truth.
 | #14 配置默认值会误连开发库 | done | bb6770d | 2026-05-18 |
 | #15 缺 lint/format/type 检查 | done | 80db582 | 2026-05-19 |
 | #16 测试覆盖只够 smoke | done | cbff250 | 2026-05-19 |
+| #17 CI/CD 空白 | done | ab3d595 | 2026-05-19 |
