@@ -205,12 +205,10 @@ async def get_image_annotated(
         x2 = cx + bw / 2
         y2 = cy + bh / 2
 
-        # 根据严重程度选择颜色
-        color_map = {"severe": "red", "medium": "orange", "light": "green"}
-        color = color_map.get(det.severity, "blue")
+        color = "red"
 
         # 绘制矩形框
-        draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=5)
 
         # 绘制置信度文字
         conf_text = f"{det.confidence:.2%}"

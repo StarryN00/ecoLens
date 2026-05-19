@@ -82,14 +82,11 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
       const w = (x2 - x1) * canvas.width;
       const h = (y2 - y1) * canvas.height;
 
-      // 根据严重程度设置颜色
-      const color =
-        det.severity === 'severe' ? '#ff4d4f' :
-        det.severity === 'medium' ? '#faad14' : '#52c41a';
+      const color = '#ff0000';
 
       // 绘制矩形框
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 5;
       ctx.strokeRect(x, y, w, h);
 
       // 绘制标签背景
