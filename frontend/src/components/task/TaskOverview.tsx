@@ -27,6 +27,12 @@ const TaskOverview: React.FC<Props> = ({ task, results, loading }) => {
           <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
           <Descriptions.Item label="巡检区域">{task.area_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="操作员">{task.operator || '-'}</Descriptions.Item>
+          <Descriptions.Item label="地块面积">
+            {task.plot_area_mu != null ? `${task.plot_area_mu} 亩` : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="林业局小班号">
+            {task.forestry_sub_compartment || '-'}
+          </Descriptions.Item>
           <Descriptions.Item label="状态">{getStatusTag(task.status)}</Descriptions.Item>
           <Descriptions.Item label="创建时间">
             {new Date(task.created_at).toLocaleString()}

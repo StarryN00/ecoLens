@@ -58,6 +58,8 @@ class InspectionTask(Base):
         String(36), ForeignKey("users.id"), index=True, nullable=False
     )
     owner = relationship("User")
+    plot_area_mu = Column(Float, nullable=True)
+    forestry_sub_compartment = Column(String(50), nullable=True)
     status = Column(
         String(20), default="uploading"
     )  # uploading/processing/completed/failed

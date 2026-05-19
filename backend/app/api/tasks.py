@@ -21,6 +21,8 @@ class TaskCreateRequest(BaseModel):
     task_name: str
     area_name: Optional[str] = None
     operator: Optional[str] = None
+    plot_area_mu: Optional[float] = None
+    forestry_sub_compartment: Optional[str] = None
 
 
 @router.post("/")
@@ -36,12 +38,16 @@ async def create_task(
         request.area_name,
         request.operator,
         owner_id=current_user.id,
+        plot_area_mu=request.plot_area_mu,
+        forestry_sub_compartment=request.forestry_sub_compartment,
     )
     return {
         "id": str(task.id),
         "task_name": task.task_name,
         "area_name": task.area_name,
         "operator": task.operator,
+        "plot_area_mu": task.plot_area_mu,
+        "forestry_sub_compartment": task.forestry_sub_compartment,
         "status": task.status,
         "created_at": task.created_at,
     }
@@ -69,6 +75,8 @@ async def list_tasks(
                 "task_name": task.task_name,
                 "area_name": task.area_name,
                 "operator": task.operator,
+                "plot_area_mu": task.plot_area_mu,
+                "forestry_sub_compartment": task.forestry_sub_compartment,
                 "status": task.status,
                 "total_images": task.total_images,
                 "processed_images": task.processed_images,
@@ -88,6 +96,8 @@ async def get_task(task: InspectionTask = Depends(get_owned_task)):
         "task_name": task.task_name,
         "area_name": task.area_name,
         "operator": task.operator,
+        "plot_area_mu": task.plot_area_mu,
+        "forestry_sub_compartment": task.forestry_sub_compartment,
         "status": task.status,
         "total_images": task.total_images,
         "processed_images": task.processed_images,

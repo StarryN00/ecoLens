@@ -18,6 +18,8 @@ class TaskService:
         area_name: Optional[str] = None,
         operator: Optional[str] = None,
         owner_id: Optional[str] = None,
+        plot_area_mu: Optional[float] = None,
+        forestry_sub_compartment: Optional[str] = None,
     ) -> InspectionTask:
         """创建巡检任务。
 
@@ -30,6 +32,8 @@ class TaskService:
             area_name=area_name,
             operator=operator,
             owner_id=owner_id,
+            plot_area_mu=plot_area_mu,
+            forestry_sub_compartment=forestry_sub_compartment,
             status="uploading",
         )
         self.db.add(task)

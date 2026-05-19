@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Upload, message, Steps } from 'antd';
+import { Form, Input, InputNumber, Button, Card, Upload, message, Steps } from 'antd';
 import { UploadOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { taskApi } from '../services/api';
@@ -94,6 +94,26 @@ const TaskCreate: React.FC = () => {
               name="operator"
             >
               <Input placeholder="操作员姓名" />
+            </Form.Item>
+
+            <Form.Item
+              label="地块面积"
+              name="plot_area_mu"
+            >
+              <InputNumber
+                min={0}
+                precision={2}
+                addonAfter="亩"
+                placeholder="可选"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="林业局小班号"
+              name="forestry_sub_compartment"
+            >
+              <Input placeholder="例如: A-12-3（可选）" />
             </Form.Item>
 
             <Form.Item>

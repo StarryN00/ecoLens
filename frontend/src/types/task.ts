@@ -3,6 +3,8 @@ export interface Task {
   task_name: string;
   area_name: string;
   operator: string;
+  plot_area_mu?: number | null;
+  forestry_sub_compartment?: string | null;
   status: string;
   total_images: number;
   processed_images: number;
