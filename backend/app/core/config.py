@@ -25,17 +25,13 @@ class Settings(BaseSettings):
     THUMBNAIL_DIR: str = "./thumbnails"
 
     # AI模型 - 虫巢检测
-    NEST_DETECTION_MODEL_PATH: str = "./models/best.pt"
+    NEST_DETECTION_MODEL_PATH: str = "./models/nest_det.pt"
     CONFIDENCE_THRESHOLD: float = 0.5
 
     # AI模型 - 树种识别
-    TREE_CLASSIFICATION_MODEL_PATH: str = "./models/best.pt"
+    TREE_CLASSIFICATION_MODEL_PATH: str = "./models/tree_seg.pt"
     CAMPHOR_TREE_CLASS_ID: int = 1
     TREE_DETECTION_THRESHOLD: float = 0.05
-
-    # 旧的模型路径（保持兼容）
-    TREE_MODEL_PATH: str = "./models/best.pt"
-    NEST_MODEL_PATH: str = "./models/best.pt"
 
     # JWT 鉴权
     # SECRET_KEY 没有默认值：必须通过环境变量（或 .env）显式配置
