@@ -1,6 +1,6 @@
 #!/bin/bash
-# 樟巢螟智能检测系统 - 开发监控脚本
-# 用法: ./monitor.sh [间隔秒数]
+# monitor.sh — local development file-change monitor (not used in CI/CD)
+# Usage: ./monitor.sh [interval_seconds]
 
 INTERVAL=${1:-600}  # 默认600秒(10分钟)
 PROJECT_DIR="/Users/starryn/project/ecoLens"

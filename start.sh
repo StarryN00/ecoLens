@@ -1,6 +1,7 @@
 #!/bin/bash
-# 樟巢螟智能检测系统 - 启动脚本
-# 使用方法: ./start.sh [start|stop|status|logs]
+# start.sh — local development helper (not used in CI/CD)
+# Production deployments go through .github/workflows/deploy.yml automatically.
+# Usage: ./start.sh [start|stop|restart|status|logs]
 
 PROJECT_DIR="/Users/starryn/project/ecoLens"
 BACKEND_DIR="$PROJECT_DIR/backend"

@@ -1,6 +1,9 @@
 #!/bin/bash
-# 服务器部署脚本 - deploy.sh
-# 在服务器上执行: bash deploy.sh
+# deploy.sh — one-time server bootstrap (first install only)
+# Subsequent deployments are handled automatically by .github/workflows/deploy.yml
+# (triggers on every push to main that passes CI).
+#
+# Run on a fresh server: bash deploy.sh
 
 set -e
 
