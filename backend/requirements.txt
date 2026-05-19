@@ -32,7 +32,7 @@ torchvision==0.16.1
 opencv-python-headless==4.8.1.78
 
 # 可观测性
-prometheus-fastapi-instrumentator==6.1.0
+prometheus-fastapi-instrumentator==6.1.0  # 7.x 要 starlette>=0.30 与 fastapi 0.104.1 冲突，锁 6.x
 sentry-sdk[fastapi]==1.40.6
 python-json-logger==2.0.7
 
