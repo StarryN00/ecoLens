@@ -15,3 +15,4 @@ item; this file is its single source of truth.
 | #16 测试覆盖只够 smoke | done | cbff250 | 2026-05-19 |
 | #17 CI/CD 空白 | done | ab3d595 | 2026-05-19 |
 | #18 TaskDetail 单体组件拆分 | done | 3b27173 | 2026-05-19 |
+| #19 长任务进度刷新 | done | 402439e | 2026-05-19 |
