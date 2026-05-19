@@ -31,5 +31,7 @@ Verdict flow per task:
 
 | Task | Status | Commit | Date | Notes |
 |------|--------|--------|------|-------|
-| T4 | in_review | 415bc89 | 2026-05-19 | 后端+前端统一红色宽5边框 |
-| W1 | BLOCKED | — | 2026-05-19 | W4 is marked blocked but the required model upload/restart/verification was not implemented in this commit range |
+| T4 | done | 415bc89 | 2026-05-19 | 后端+前端统一红色宽5边框，Codex PASS |
+| W4 | manual | — | 2026-05-19 | agent skip：需要 user 手动 SSH + rsync .pt 文件到生产 + restart PM2 |
+
+> Note: W1 prior BLOCKED entry removed manually by user — wrapper bug rolled back W1 implementation. W1 will be retried at next fire.
