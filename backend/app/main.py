@@ -1,19 +1,28 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 
 from app.core.config import get_settings
 from app.core.database import init_db
+from app.core.logging_config import configure_logging
 from app.api import tasks, images, nests, auth
 
 # 显式引入 models 以确保 SQLAlchemy 的 Base.metadata 在 init_db 时能创建 users 表
 from app import models  # noqa: F401
 
-logger = logging.getLogger(__name__)
-
 settings = get_settings()
+configure_logging(debug=settings.DEBUG)
+
+try:
+    import sentry_sdk
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
+except ImportError:
+    pass
+
+logger = logging.getLogger(__name__)
 
 # 启动期把最终生效的 CORS 白名单打印出来，便于排查 "前端 CORS 失败" 的问题。
 # Settings 的 model_validator 已保证列表非空，这里只需打印。
@@ -23,10 +32,8 @@ logger.info("CORS allowed origins: %s", settings.cors_origins_list)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时初始化数据库
     await init_db()
     yield
-    # 关闭时清理资源
 
 
 app = FastAPI(
@@ -44,6 +51,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    # 自动埋点所有路由，暴露 /metrics 端点
+    Instrumentator().instrument(app).expose(app)
+except ImportError:
+    pass
 
 # 注册路由
 app.include_router(auth.router)

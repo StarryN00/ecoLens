@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # CORS 允许的来源（逗号分隔），生产环境必须显式指定
     CORS_ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
+    # 可观测性 — 可选，未配置时不初始化
+    SENTRY_DSN: str = ""
+
     class Config:
         env_file = ".env"
 
