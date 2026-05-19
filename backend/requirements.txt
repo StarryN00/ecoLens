@@ -1,4 +1,5 @@
 fastapi==0.104.1
+starlette==0.27.0  # fastapi 0.104.1 的直接依赖；显式锁定防止 prometheus-fastapi-instrumentator 7.x 把它拉到 >=0.30.0
 uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
