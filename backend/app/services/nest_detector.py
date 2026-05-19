@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from app.core.config import get_settings
 
@@ -18,21 +18,46 @@ except Exception as e:  # pragma: no cover
 from PIL import Image  # for size extraction
 
 
+# ---------------------------------------------------------------------------
+# Module-level NMS helpers (no YOLO dependency)
+# ---------------------------------------------------------------------------
+
+def _iou(a: Dict[str, Any], b: Dict[str, Any]) -> float:
+    """IoU for two detections with x1/y1/x2/y2 pixel-coord keys."""
+    ix1 = max(a["x1"], b["x1"])
+    iy1 = max(a["y1"], b["y1"])
+    ix2 = min(a["x2"], b["x2"])
+    iy2 = min(a["y2"], b["y2"])
+    iw = max(0.0, ix2 - ix1)
+    ih = max(0.0, iy2 - iy1)
+    inter = iw * ih
+    area_a = (a["x2"] - a["x1"]) * (a["y2"] - a["y1"])
+    area_b = (b["x2"] - b["x1"]) * (b["y2"] - b["y1"])
+    union = area_a + area_b - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _nms(
+    detections: List[Dict[str, Any]], iou_threshold: float = 0.5
+) -> List[Dict[str, Any]]:
+    """Greedy NMS on dicts with x1/y1/x2/y2/conf keys."""
+    detections = sorted(detections, key=lambda d: d["conf"], reverse=True)
+    keep: List[Dict[str, Any]] = []
+    while detections:
+        best = detections.pop(0)
+        keep.append(best)
+        detections = [d for d in detections if _iou(best, d) < iou_threshold]
+    return keep
+
+
 class NestDetector:
     """基于 YOLOv8 的虫巢检测器"""
 
     def __init__(
         self, model_path: Optional[str] = None, conf_threshold: Optional[float] = None
     ):
-        """
-        初始化检测器
-
-        :param model_path: 模型权重路径，相对路径将相对于后端根目录解析
-        :param conf_threshold: 置信度阈值，默认使用配置中的 CONFIDENCE_THRESHOLD
-        """
         settings = get_settings()
 
-        # 模型路径来自参数或配置
         self.model_path: Optional[str] = model_path or getattr(
             settings, "NEST_DETECTION_MODEL_PATH", "./models/nest_det.pt"
         )
@@ -45,7 +70,6 @@ class NestDetector:
         self._model: Optional[Any] = None
         self._model_loaded: bool = False
 
-        # 计算模型的绝对路径，优先使用传入的绝对路径，其次将相对路径解析为 backend/models 目录下的路径
         self._resolved_model_path = self._resolve_model_path(self.model_path)
 
     @staticmethod
@@ -55,8 +79,6 @@ class NestDetector:
         p = Path(model_path)
         if p.is_absolute():
             return str(p)
-        # 基于当前文件位置向上回溯到 backend/ 目录再拼接模型路径
-        # nest_detector.py 在 backend/app/services/，parents[2] = backend/
         backend_root = Path(__file__).resolve().parents[2]
         abs_path = (backend_root / model_path).resolve()
         return str(abs_path)
@@ -85,117 +107,156 @@ class NestDetector:
             return
 
         try:
-            # 使用 YOLOv8 加载模型
             self._model = YOLO(self._resolved_model_path)
             logger.info(f"模型加载成功: {self._resolved_model_path}")
         except Exception as e:
             logger.error(f"模型加载失败: {e}")
             self._model = None
 
+    # ------------------------------------------------------------------
+    # Shared parsing helpers
+    # ------------------------------------------------------------------
+
+    def _parse_yolo_results(
+        self, results, offset_x: int, offset_y: int
+    ) -> List[Dict[str, Any]]:
+        """Parse YOLO result list into pixel-coord dicts shifted by (offset_x, offset_y)."""
+        out: List[Dict[str, Any]] = []
+        if not isinstance(results, list):
+            return out
+        for r in results:
+            boxes = getattr(r, "boxes", None)
+            if boxes is None:
+                continue
+            box_len = len(boxes) if hasattr(boxes, "__len__") else 0
+            if box_len == 0:
+                continue
+            try:
+                xyxy_list = boxes.xyxy.cpu().numpy()
+                confs = boxes.conf.cpu().numpy() if hasattr(boxes, "conf") else None
+            except Exception as e:
+                logger.error(f"解析boxes失败: {e}")
+                continue
+            for idx in range(len(xyxy_list)):
+                x1, y1, x2, y2 = xyxy_list[idx].tolist()
+                conf = float(confs[idx]) if confs is not None else 0.5
+                out.append({
+                    "x1": x1 + offset_x,
+                    "y1": y1 + offset_y,
+                    "x2": x2 + offset_x,
+                    "y2": y2 + offset_y,
+                    "conf": conf,
+                })
+        return out
+
+    @staticmethod
+    def _pixel_dets_to_normalized(
+        pixel_dets: List[Dict[str, Any]], width: int, height: int
+    ) -> List[Dict[str, Any]]:
+        """Convert pixel-coord detection dicts to normalized output format."""
+        out: List[Dict[str, Any]] = []
+        for det in pixel_dets:
+            x1, y1, x2, y2, conf = (
+                det["x1"], det["y1"], det["x2"], det["y2"], det["conf"]
+            )
+            nx1, ny1 = x1 / width, y1 / height
+            nx2, ny2 = x2 / width, y2 / height
+            cx = ((x1 + x2) / 2.0) / width
+            cy = ((y1 + y2) / 2.0) / height
+            bw = (x2 - x1) / width
+            bh = (y2 - y1) / height
+            if conf > 0.8:
+                severity = "severe"
+            elif conf > 0.6:
+                severity = "medium"
+            else:
+                severity = "light"
+            out.append({
+                "bbox": [nx1, ny1, nx2, ny2],
+                "confidence": conf,
+                "severity": severity,
+                "bbox_center": [cx, cy],
+                "bbox_width": bw,
+                "bbox_height": bh,
+            })
+        return out
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def detect(self, image_path: str) -> List[Dict[str, Any]]:
-        """
-        对给定图片进行虫巢检测
-
-        :param image_path: 待检测图片路径
-        :return: 符合指定格式的检测结果列表
-        """
+        """对给定图片进行虫巢检测，大图自动切片以避免 YOLO 缩放漏检小目标。"""
         self._load_model()
-
         if self._model is None:
-            # 模型不可用，返回空列表
             return []
 
-        # 打开图片以获取尺寸
         try:
             with Image.open(image_path) as img:
-                width, height = img.size
+                img_rgb = img.convert("RGB")
+                width, height = img_rgb.size
         except Exception:
-            # 无法打开图片，返回空
             return []
 
+        # For images larger than 640 px on either dimension, use sliced inference
+        # so YOLO never has to downscale and miss small targets.
+        if max(width, height) > 640:
+            logger.info(
+                f"图片尺寸 {width}x{height} > 640，启用切片推理: {image_path}"
+            )
+            return self._detect_sliced(img_rgb, width, height)
+
+        return self._detect_full(image_path, width, height)
+
+    # ------------------------------------------------------------------
+    # Internal inference paths
+    # ------------------------------------------------------------------
+
+    def _detect_full(
+        self, image_path: str, width: int, height: int
+    ) -> List[Dict[str, Any]]:
+        """Run YOLO on the full image (used only when image fits in 640×640)."""
         try:
-            # 运行推理
-            logger.info(f"开始检测图片: {image_path}")
+            logger.info(f"全图推理: {image_path}")
             results = self._model.predict(
                 source=image_path, conf=self.conf_threshold, verbose=False
             )
-            logger.info(
-                f"检测完成，原始结果数量: {len(results) if isinstance(results, list) else 1}"
-            )
-
-            # Ultralytics v8 的结果结构因版本略有不同，做尽量兼容的解析
-            detections: List[Dict[str, Any]] = []
-
-            # results 可能是一个列表（多图/多模型返回），遍历处理
-            if isinstance(results, list):
-                for r in results:
-                    boxes = getattr(r, "boxes", None)
-                    logger.info(f" boxes对象: {boxes}")
-                    if boxes is None:
-                        logger.info(f" boxes为None，跳过")
-                        continue
-                    # 检查boxes是否有数据
-                    box_len = len(boxes) if hasattr(boxes, "__len__") else 0
-                    logger.info(f" boxes数量: {box_len}")
-                    if box_len == 0:
-                        continue
-                    # boxes.xyxy 是一个 tensor( N, 4 )
-                    try:
-                        xyxy_list = boxes.xyxy.cpu().numpy()
-                        confs = (
-                            boxes.conf.cpu().numpy() if hasattr(boxes, "conf") else None
-                        )
-                        logger.info(
-                            f" xyxy_list形状: {xyxy_list.shape}, confs: {confs}"
-                        )
-                    except Exception as e:
-                        logger.error(f" 解析boxes失败: {e}")
-                        continue
-
-                    for idx in range(len(xyxy_list)):
-                        x1, y1, x2, y2 = xyxy_list[idx].tolist()
-                        conf = (
-                            float(confs[idx])
-                            if confs is not None
-                            else float(getattr(boxes, "conf", [0.0])[idx])
-                        )
-
-                        # 归一化
-                        nx1, ny1, nx2, ny2 = (
-                            float(x1) / width,
-                            float(y1) / height,
-                            float(x2) / width,
-                            float(y2) / height,
-                        )
-
-                        # 计算中心、宽高（相对值）
-                        cx = ((x1 + x2) / 2.0) / width
-                        cy = ((y1 + y2) / 2.0) / height
-                        bw = (x2 - x1) / width
-                        bh = (y2 - y1) / height
-
-                        # 严重程度
-                        if conf > 0.8:
-                            severity = "severe"
-                        elif conf > 0.6:
-                            severity = "medium"
-                        else:
-                            severity = "light"
-
-                        detections.append(
-                            {
-                                "bbox": [nx1, ny1, nx2, ny2],
-                                "confidence": float(conf),
-                                "severity": severity,
-                                "bbox_center": [float(cx), float(cy)],
-                                "bbox_width": float(bw),
-                                "bbox_height": float(bh),
-                            }
-                        )
+            pixel_dets = self._parse_yolo_results(results, offset_x=0, offset_y=0)
+            detections = self._pixel_dets_to_normalized(pixel_dets, width, height)
+            logger.info(f"全图推理完成，检测到 {len(detections)} 个目标")
             return detections
         except Exception:
-            # 推理过程异常，返回空列表
             return []
+
+    def _detect_sliced(
+        self, img: Image.Image, width: int, height: int
+    ) -> List[Dict[str, Any]]:
+        """White-balance → slice → per-tile YOLO → NMS → full-image normalized coords."""
+        from app.utils.image_utils import slice_image, white_balance_correction
+
+        wb_img = white_balance_correction(img)
+        slices = slice_image(wb_img, slice_size=640, overlap=0.2)
+        logger.info(f"切片数量: {len(slices)}")
+
+        all_pixel_dets: List[Dict[str, Any]] = []
+        for sl in slices:
+            tile_arr = sl["slice"]
+            ox, oy = int(sl["x"]), int(sl["y"])
+            try:
+                results = self._model.predict(
+                    source=tile_arr, conf=self.conf_threshold, verbose=False
+                )
+            except Exception as e:
+                logger.error(f"切片推理失败 offset=({ox},{oy}): {e}")
+                continue
+            all_pixel_dets.extend(
+                self._parse_yolo_results(results, offset_x=ox, offset_y=oy)
+            )
+
+        logger.info(f"切片推理原始检测数: {len(all_pixel_dets)}")
+        merged = _nms(all_pixel_dets, iou_threshold=0.5)
+        logger.info(f"NMS 后检测数: {len(merged)}")
+        return self._pixel_dets_to_normalized(merged, width, height)
 
 
 __all__ = ["NestDetector"]

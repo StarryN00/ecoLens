@@ -318,3 +318,70 @@ class TestEndToEndPipeline:
         ]
         result = deduplicate_nests(detections, eps_meters=3.0)
         assert len(result) == 2, "Nests far apart must remain separate"
+
+
+class TestNestDetectorNMS:
+    """Unit tests for the NMS helpers in nest_detector (pure Python, no model needed)."""
+
+    from app.services.nest_detector import _iou, _nms
+
+    def _det(self, x1, y1, x2, y2, conf=0.9):
+        return {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "conf": conf}
+
+    def test_iou_identical_boxes(self):
+        from app.services.nest_detector import _iou
+        a = self._det(0, 0, 10, 10)
+        assert _iou(a, a) == 1.0
+
+    def test_iou_non_overlapping(self):
+        from app.services.nest_detector import _iou
+        a = self._det(0, 0, 10, 10)
+        b = self._det(20, 20, 30, 30)
+        assert _iou(a, b) == 0.0
+
+    def test_iou_partial_overlap(self):
+        from app.services.nest_detector import _iou
+        # Two 10x10 boxes overlapping by 5x10 = 50 px²; union = 150 px²
+        a = self._det(0, 0, 10, 10)
+        b = self._det(5, 0, 15, 10)
+        assert _iou(a, b) == pytest.approx(50 / 150)
+
+    def test_nms_keeps_best_removes_duplicate(self):
+        from app.services.nest_detector import _nms
+        # Same box at two confidence levels — lower one should be suppressed
+        high = self._det(0, 0, 10, 10, conf=0.9)
+        low = self._det(0, 0, 10, 10, conf=0.5)
+        result = _nms([low, high], iou_threshold=0.5)
+        assert len(result) == 1
+        assert result[0]["conf"] == 0.9
+
+    def test_nms_keeps_non_overlapping(self):
+        from app.services.nest_detector import _nms
+        a = self._det(0, 0, 10, 10)
+        b = self._det(100, 100, 110, 110)
+        result = _nms([a, b], iou_threshold=0.5)
+        assert len(result) == 2
+
+    def test_pixel_dets_to_normalized_coords(self):
+        """Verify coordinate normalization from pixel-coord dict to output format."""
+        from app.services.nest_detector import NestDetector
+        pixel_dets = [{"x1": 0.0, "y1": 0.0, "x2": 100.0, "y2": 50.0, "conf": 0.85}]
+        result = NestDetector._pixel_dets_to_normalized(pixel_dets, width=200, height=100)
+        assert len(result) == 1
+        det = result[0]
+        assert det["bbox"] == pytest.approx([0.0, 0.0, 0.5, 0.5])
+        assert det["bbox_center"] == pytest.approx([0.25, 0.25])
+        assert det["bbox_width"] == pytest.approx(0.5)
+        assert det["bbox_height"] == pytest.approx(0.5)
+        assert det["severity"] == "severe"  # conf=0.85 > 0.8
+        assert det["confidence"] == pytest.approx(0.85)
+
+    def test_severity_thresholds(self):
+        from app.services.nest_detector import NestDetector
+        cases = [(0.85, "severe"), (0.7, "medium"), (0.5, "light")]
+        for conf, expected in cases:
+            dets = NestDetector._pixel_dets_to_normalized(
+                [{"x1": 0, "y1": 0, "x2": 10, "y2": 10, "conf": conf}],
+                width=100, height=100,
+            )
+            assert dets[0]["severity"] == expected
