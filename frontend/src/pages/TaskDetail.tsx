@@ -23,7 +23,7 @@ const TaskDetail: React.FC = () => {
   }
 
   const tabItems = [
-    { key: 'overview', label: '概览', children: <TaskOverview task={task} results={results} loading={loading} /> },
+    { key: 'overview', label: '概览', children: <TaskOverview task={task} results={results} nests={nests} loading={loading} /> },
     { key: 'map', label: '地图', children: <NestMap nests={nests} images={images} loading={loading} /> },
     { key: 'nests', label: '虫巢列表', children: <NestListTab nests={nests} loading={loading} /> },
     { key: 'images', label: '图片', children: <ImageListTab images={images} task={task} loading={loading} /> },

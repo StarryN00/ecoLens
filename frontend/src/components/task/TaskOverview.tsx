@@ -1,23 +1,20 @@
 import React from 'react';
-import { Card, Descriptions, Row, Col, Statistic, Progress, Button, message, Typography } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
-import type { Task, TaskResults } from '../../types/task';
+import { Card, Descriptions, Row, Col, Statistic, Progress, Typography } from 'antd';
+import type { Task, TaskResults, Nest } from '../../types/task';
 import { getStatusTag } from './taskUtils';
+import ReportGenerator from '../ReportGenerator';
 
 interface Props {
   task: Task;
   results: TaskResults | null;
+  nests: Nest[];
   loading: boolean;
 }
 
 const { Text } = Typography;
 
-const TaskOverview: React.FC<Props> = ({ task, results, loading }) => {
+const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
   const isActive = task.status === 'processing' || task.status === 'uploading';
-
-  const exportReport = () => {
-    message.info('报告导出功能开发中...');
-  };
 
   return (
     <>
@@ -110,9 +107,18 @@ const TaskOverview: React.FC<Props> = ({ task, results, loading }) => {
       </Card>
 
       <div style={{ marginTop: 16, textAlign: 'right' }}>
-        <Button type="primary" icon={<DownloadOutlined />} onClick={exportReport}>
-          导出报告
-        </Button>
+        <ReportGenerator data={{
+          task_name: task.task_name,
+          area_name: task.area_name,
+          operator: task.operator,
+          plot_area_mu: task.plot_area_mu,
+          forestry_sub_compartment: task.forestry_sub_compartment,
+          created_at: task.created_at,
+          completed_at: task.completed_at ?? undefined,
+          total_images: task.total_images,
+          processed_images: task.processed_images,
+          nests,
+        }} />
       </div>
     </>
   );
