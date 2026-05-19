@@ -37,3 +37,4 @@ Verdict flow per task:
 | W2 | in_review | eb23ed9 | 2026-05-20 | prometheus-fastapi-instrumentator 锁 6.1.0，7.x 与 fastapi 0.104.1 的 starlette==0.27 冲突 |
 
 > Note: W1 prior BLOCKED entry removed manually by user — wrapper bug rolled back W1 implementation. W1 will be retried at next fire.
+| T3 | BLOCKED | — | 2026-05-20 | T3 is incomplete because the original-image button was added only to an unused component and is not reachable in the actual annotated image UI |
