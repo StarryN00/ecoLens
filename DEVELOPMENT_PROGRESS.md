@@ -34,5 +34,6 @@ Verdict flow per task:
 | T4 | done | 415bc89 | 2026-05-19 | 后端+前端统一红色宽5边框，Codex PASS |
 | W4 | manual | — | 2026-05-19 | agent skip：需要 user 手动 SSH + rsync .pt 文件到生产 + restart PM2 |
 | W1 | in_review | 0519d19 | 2026-05-19 | requirements.txt 加 bcrypt==4.0.1，passlib 1.7.4 不兼容 bcrypt 5.x |
+| W2 | in_review | eb23ed9 | 2026-05-20 | prometheus-fastapi-instrumentator 锁 6.1.0，7.x 与 fastapi 0.104.1 的 starlette==0.27 冲突 |
 
 > Note: W1 prior BLOCKED entry removed manually by user — wrapper bug rolled back W1 implementation. W1 will be retried at next fire.
