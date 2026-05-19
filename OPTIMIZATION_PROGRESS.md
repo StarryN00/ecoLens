@@ -17,3 +17,4 @@ item; this file is its single source of truth.
 | #18 TaskDetail 单体组件拆分 | done | 3b27173 | 2026-05-19 |
 | #19 长任务进度刷新 | done | 402439e | 2026-05-19 |
 | #20 切片推理未启用 | done | 153f291 | 2026-05-19 |
+| #21 best.pt 双模型混用 | done | d4cf646 | 2026-05-19 |
