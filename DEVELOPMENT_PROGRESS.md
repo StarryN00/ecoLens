@@ -41,3 +41,4 @@ Verdict flow per task:
 | T2 | in_review | 23d248f | 2026-05-20 | 地块面积(plot_area_mu)和林业局小班号(forestry_sub_compartment)全栈实现：model/service/API/migration/frontend |
 | T1 | BLOCKED | — | 2026-05-20 | task creation does not enforce complete three-level town selection, and region path updates are incomplete |
 | W3 | BLOCKED | — | 2026-05-20 | W3 leaves CI still ignoring the rewritten test files, so the task acceptance criteria are not met |
+| T8 | in_review | 107c444 | 2026-05-20 | admin user management: GET/POST/PUT/DELETE /api/v1/admin/users + UserAdmin.tsx page + AdminRoute guard |
