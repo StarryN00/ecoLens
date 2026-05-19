@@ -14,3 +14,4 @@ item; this file is its single source of truth.
 | #15 缺 lint/format/type 检查 | done | 80db582 | 2026-05-19 |
 | #16 测试覆盖只够 smoke | done | cbff250 | 2026-05-19 |
 | #17 CI/CD 空白 | done | ab3d595 | 2026-05-19 |
+| #18 TaskDetail 单体组件拆分 | done | 3b27173 | 2026-05-19 |
