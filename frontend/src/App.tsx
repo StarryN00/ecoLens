@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Dropdown, Space, message } from 'antd';
-import { UserOutlined, DownOutlined, LockOutlined, LogoutOutlined } from '@ant-design/icons';
+import { UserOutlined, DownOutlined, LockOutlined, LogoutOutlined, TeamOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import TaskList from './pages/TaskList';
 import TaskCreate from './pages/TaskCreate';
 import TaskDetail from './pages/TaskDetail';
+import UserAdmin from './pages/admin/UserAdmin';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import { authApi } from './services/api';
 import './App.css';
@@ -22,7 +23,9 @@ const doLogout = () => {
 
 // 右上角：当前用户名 + 下拉菜单（修改密码 / 退出登录）
 const UserMenu: React.FC = () => {
+  const navigate = useNavigate();
   const [username, setUsername] = useState<string>('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
 
   useEffect(() => {
@@ -30,7 +33,10 @@ const UserMenu: React.FC = () => {
     authApi
       .getMe()
       .then((data: any) => {
-        if (!cancelled && data?.username) setUsername(data.username);
+        if (!cancelled && data?.username) {
+          setUsername(data.username);
+          setIsAdmin(data.is_admin === true);
+        }
       })
       .catch(() => {
         // 401 已被 api.ts 拦截器处理；这里静默
@@ -41,6 +47,17 @@ const UserMenu: React.FC = () => {
   }, []);
 
   const items: MenuProps['items'] = [
+    ...(isAdmin
+      ? [
+          {
+            key: 'admin-users',
+            label: '用户管理',
+            icon: <TeamOutlined />,
+            onClick: () => navigate('/admin/users'),
+          },
+          { type: 'divider' as const },
+        ]
+      : []),
     {
       key: 'change-password',
       label: '修改密码',
@@ -109,6 +126,28 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return token ? <>{children}</> : <Navigate to="/login" />;
 };
 
+// 管理员路由守卫：在 PrivateRoute 基础上加 is_admin 检查
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!token) {
+      setIsAdmin(false);
+      return;
+    }
+    authApi
+      .getMe()
+      .then((data: any) => setIsAdmin(data?.is_admin === true))
+      .catch(() => setIsAdmin(false));
+  }, [token]);
+
+  if (!token) return <Navigate to="/login" replace />;
+  if (isAdmin === null) return null;
+  if (!isAdmin) return <Navigate to="/tasks" replace />;
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <Router>
@@ -143,6 +182,16 @@ function App() {
                 <TaskDetail />
               </MainLayout>
             </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute>
+              <MainLayout>
+                <UserAdmin />
+              </MainLayout>
+            </AdminRoute>
           }
         />
         <Route path="/" element={<Navigate to="/tasks" />} />

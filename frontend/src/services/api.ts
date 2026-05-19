@@ -154,4 +154,21 @@ export const imageApi = {
     fetchAuthedImageUrl(`/api/v1/images/${id}/annotated`),
 };
 
+// 管理员用户管理 API (T8)
+export const adminApi = {
+  listUsers: (skip = 0, limit = 50) =>
+    api.get('/api/v1/admin/users', { params: { skip, limit } }),
+  createUser: (data: {
+    username: string;
+    password: string;
+    email?: string;
+    is_admin?: boolean;
+  }) => api.post('/api/v1/admin/users', data),
+  updateUser: (
+    id: string,
+    data: { is_active?: boolean; is_admin?: boolean; new_password?: string },
+  ) => api.put(`/api/v1/admin/users/${id}`, data),
+  deleteUser: (id: string) => api.delete(`/api/v1/admin/users/${id}`),
+};
+
 export default api;
