@@ -39,3 +39,4 @@ Verdict flow per task:
 > Note: W1 prior BLOCKED entry removed manually by user — wrapper bug rolled back W1 implementation. W1 will be retried at next fire.
 | T3 | BLOCKED | — | 2026-05-20 | T3 is incomplete because the original-image button was added only to an unused component and is not reachable in the actual annotated image UI |
 | T2 | in_review | 23d248f | 2026-05-20 | 地块面积(plot_area_mu)和林业局小班号(forestry_sub_compartment)全栈实现：model/service/API/migration/frontend |
+| T1 | BLOCKED | — | 2026-05-20 | task creation does not enforce complete three-level town selection, and region path updates are incomplete |
