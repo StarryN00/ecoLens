@@ -16,3 +16,4 @@ item; this file is its single source of truth.
 | #17 CI/CD 空白 | done | ab3d595 | 2026-05-19 |
 | #18 TaskDetail 单体组件拆分 | done | 3b27173 | 2026-05-19 |
 | #19 长任务进度刷新 | done | 402439e | 2026-05-19 |
+| #20 切片推理未启用 | done | 153f291 | 2026-05-19 |
