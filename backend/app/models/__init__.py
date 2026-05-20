@@ -4,19 +4,20 @@ SQLite 兼容的数据库模型
 用于本地快速开发和测试
 """
 
+import uuid
+
 from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
-    Integer,
     Boolean,
+    Column,
+    DateTime,
     Float,
     ForeignKey,
+    Integer,
+    String,
     Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import uuid
 
 from app.core.database import Base
 

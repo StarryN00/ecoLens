@@ -32,10 +32,9 @@ from app.core.config import get_settings  # noqa: E402
 
 get_settings.cache_clear()
 
-from app.core.database import SyncSessionLocal, sync_engine  # noqa: E402
+from app.core.database import SyncSessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Image, InspectionTask, User  # noqa: E402
-
+from app.models import InspectionTask, User  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures

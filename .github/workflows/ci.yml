@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run tests
-        run: python -m pytest tests/ --ignore=tests/test_api.py --ignore=tests/test_inference.py -q
+        run: python -m pytest tests/ -q
 
   build-frontend:
     name: Build frontend

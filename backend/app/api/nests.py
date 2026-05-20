@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from typing import Optional
 from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import _is_owner_or_admin, get_owned_task
 from app.core.database import get_db
@@ -11,7 +12,6 @@ from app.models import (
     Image,
     ImageDetection,
     InspectionTask,
-    RawNestDetection,
     UniqueNest,
     User,
 )
@@ -176,7 +176,7 @@ async def get_task_statistics(
     # 查询GPS统计
     gps_result = await db.execute(
         select(func.count(Image.id)).where(
-            Image.task_id == task_id_str, Image.has_gps == True
+            Image.task_id == task_id_str, Image.has_gps.is_(True)
         )
     )
     gps_images = gps_result.scalar() or 0

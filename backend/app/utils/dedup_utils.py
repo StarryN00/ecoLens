@@ -1,6 +1,7 @@
+from typing import Dict, List
+
 import numpy as np
 from sklearn.cluster import DBSCAN
-from typing import List, Dict
 
 
 def deduplicate_nests(
@@ -36,7 +37,7 @@ def deduplicate_nests(
     unique_nests = []
     for cluster_id in set(clustering.labels_):
         mask = clustering.labels_ == cluster_id
-        cluster_dets = [d for d, m in zip(detections, mask) if m]
+        cluster_dets = [d for d, m in zip(detections, mask, strict=True) if m]
 
         # 严重程度排序
         severity_order = {"light": 1, "medium": 2, "severe": 3}

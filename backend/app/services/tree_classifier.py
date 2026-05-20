@@ -1,9 +1,10 @@
 import os
+from typing import Tuple
+
 import numpy as np
 import torch
 from PIL import Image
 from torchvision import transforms
-from typing import Tuple
 
 # 尝试从项目配置中导入常量
 try:

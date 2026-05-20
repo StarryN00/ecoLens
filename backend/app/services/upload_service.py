@@ -2,22 +2,20 @@ import asyncio
 import logging
 import os
 import re
-import shutil
 from pathlib import Path
 from typing import List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from PIL import Image as PILImage
-from PIL.ExifTags import TAGS, GPSTAGS
-
-from sqlalchemy.ext.asyncio import AsyncSession
+from PIL.ExifTags import GPSTAGS, TAGS
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models import Image
 from app.services.camera_sensors import resolve_sensor_width
 from app.services.task_service import TaskService
-from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +294,7 @@ class UploadService:
                     data["capture_time"] = datetime.strptime(
                         exif_data["DateTimeOriginal"], "%Y:%m:%d %H:%M:%S"
                     )
-                except:
+                except (ValueError, TypeError):
                     pass
 
             # 传感器宽度：先用 FocalPlaneXResolution 真实换算，失败回退

@@ -15,7 +15,6 @@ from app.services.camera_sensors import (
     resolve_sensor_width,
 )
 
-
 # ---------- focal_plane 路径 ----------
 
 def test_focal_plane_out_of_range_high_inch_fallbacks():

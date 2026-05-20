@@ -2,10 +2,12 @@
 测试工具函数
 """
 
-import pytest
 import math
-from app.utils.geo_utils import pixel_to_gps, calculate_gsd, bbox_center_to_pixel
+
+import pytest
+
 from app.utils.dedup_utils import deduplicate_nests, generate_nest_code
+from app.utils.geo_utils import bbox_center_to_pixel, calculate_gsd, pixel_to_gps
 
 
 class TestGeoUtils:

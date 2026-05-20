@@ -1,22 +1,18 @@
-import pytest
+import os
+
 import numpy as np
 from PIL import Image
-import io
-import tempfile
-import os
 
 from app.services.nest_detector import NestDetector
 from app.services.tree_classifier import TreeClassifier
-from app.services.geo_service import GeoService
-from app.services.dedup_service import DedupService
+from app.utils.dedup_utils import deduplicate_nests, generate_nest_code
+from app.utils.geo_utils import calculate_gsd, pixel_to_gps
 from app.utils.image_utils import (
-    white_balance_correction,
-    slice_image,
     preprocess_image,
     save_slices,
+    slice_image,
+    white_balance_correction,
 )
-from app.utils.geo_utils import pixel_to_gps, calculate_gsd
-from app.utils.dedup_utils import deduplicate_nests, generate_nest_code
 
 
 class TestImageUtils:
@@ -216,19 +212,9 @@ class TestTreeClassifier:
         assert mask.shape[0] > 0 and mask.shape[1] > 0
 
 
-class TestServicesIntegration:
-    """服务集成测试"""
-
-    @pytest.mark.asyncio
-    async def test_geo_service_mock(self):
-        """测试GPS服务（模拟）"""
-        # 这里需要模拟数据库会话
-        # 实际测试需要在有数据库的环境下运行
-        pass
-
-    @pytest.mark.asyncio
-    async def test_dedup_service_mock(self):
-        """测试去重服务（模拟）"""
-        # 这里需要模拟数据库会话
-        # 实际测试需要在有数据库的环境下运行
-        pass
+# 说明：原 TestServicesIntegration 类只有两个 `pass` 占位测试（geo_service /
+# dedup_service 的 DB 集成），既不真正断言任何东西、又拖着 GeoService /
+# DedupService 两个未使用 import。其底层纯函数 pixel_to_gps / deduplicate_nests
+# 已由 TestGeoUtils / TestDedupUtils 与 test_utils.py 充分覆盖，故移除占位类，
+# 避免 no-op 测试与 ruff unused-import 告警。service 层的 DB 集成留待
+# test_api.py 的端到端用例覆盖。

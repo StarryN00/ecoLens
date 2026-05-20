@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import os
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from PIL import Image  # for size extraction
 
 from app.core.config import get_settings
 
@@ -14,9 +16,6 @@ try:
 except Exception as e:  # pragma: no cover
     logger.error(f"YOLO导入失败: {e}")
     YOLO = None  # type: ignore
-
-from PIL import Image  # for size extraction
-
 
 # ---------------------------------------------------------------------------
 # Module-level NMS helpers (no YOLO dependency)

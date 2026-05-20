@@ -1,9 +1,11 @@
-from typing import List, Dict, Optional
+from typing import Dict, List
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.utils.geo_utils import pixel_to_gps, calculate_gsd
-from app.models import Image
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Image
+from app.utils.geo_utils import calculate_gsd, pixel_to_gps
 
 
 class GeoService:

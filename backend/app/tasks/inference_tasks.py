@@ -256,9 +256,10 @@ def deduplicate_task_sync(task_id: str) -> Dict[str, Any]:
     """
     import json
 
+    from sqlalchemy import delete
+
     from app.models import UniqueNest
     from app.utils.dedup_utils import deduplicate_nests, generate_nest_code
-    from sqlalchemy import delete
 
     with SyncSessionLocal() as db:
         try:

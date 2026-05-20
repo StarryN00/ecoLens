@@ -11,10 +11,8 @@
   * M1：callback 看到 header results 含 failed 项时把 task 标记为 failed
 """
 
-import io
 import os
 import uuid
-from unittest.mock import patch
 
 # 必填 env 必须在 import app 之前
 os.environ.setdefault("SECRET_KEY", "test-secret-key-only-for-pytest-DO-NOT-USE")
@@ -177,7 +175,7 @@ class TestChordOrchestration:
         # 3 张图 -> 3 个 process_image_task.s 调用
         assert len(captured["header_s_calls"]) == 3
         for (passed_task, passed_args), expected_img in zip(
-            captured["header_s_calls"], image_ids
+            captured["header_s_calls"], image_ids, strict=True
         ):
             assert passed_task == task_id
             assert passed_args == (expected_img,)

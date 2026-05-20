@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_owned_image, get_owned_task
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.services.upload_service import UploadService
 from app.models import Image, ImageDetection, InspectionTask
+from app.services.upload_service import UploadService
 
 router = APIRouter(
     prefix="/api/v1",
@@ -108,8 +109,9 @@ async def get_image_file(img: Image = Depends(get_owned_image)):
     用 inline 而非 attachment：浏览器 / antd Image / blob URL 流程都把它
     当成图片直接渲染；attachment 会让某些场景下被当作下载提示，行为不一致。
     """
-    from fastapi.responses import FileResponse
     import os
+
+    from fastapi.responses import FileResponse
 
     if os.path.exists(img.storage_path):
         return FileResponse(
@@ -144,8 +146,9 @@ async def get_image_info(img: Image = Depends(get_owned_image)):
 @router.get("/images/{image_id}/thumbnail")
 async def get_image_thumbnail(img: Image = Depends(get_owned_image)):
     """获取图片缩略图（不存在则返回原图）。ownership 已校验。"""
-    from fastapi.responses import FileResponse
     import os
+
+    from fastapi.responses import FileResponse
 
     thumbnail_path = f"./thumbnails/{img.id}.jpg"
     if os.path.exists(thumbnail_path):
@@ -172,11 +175,14 @@ async def get_image_annotated(
     db: AsyncSession = Depends(get_db),
 ):
     """获取带检测框标注的图片。ownership 已校验。"""
-    from fastapi.responses import StreamingResponse
-    from app.models import RawNestDetection
-    from PIL import Image as PILImage, ImageDraw
     import io
     import os
+
+    from fastapi.responses import StreamingResponse
+    from PIL import Image as PILImage
+    from PIL import ImageDraw
+
+    from app.models import RawNestDetection
 
     if not os.path.exists(img.storage_path):
         raise HTTPException(status_code=404, detail="图片文件不存在")

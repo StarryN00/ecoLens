@@ -4,13 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# 显式引入 models 以确保 SQLAlchemy 的 Base.metadata 在 init_db 时能创建 users 表
+from app import models  # noqa: F401
+from app.api import admin_users, auth, images, nests, tasks
 from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.logging_config import configure_logging
-from app.api import tasks, images, nests, auth, admin_users
-
-# 显式引入 models 以确保 SQLAlchemy 的 Base.metadata 在 init_db 时能创建 users 表
-from app import models  # noqa: F401
 
 settings = get_settings()
 configure_logging(debug=settings.DEBUG)
