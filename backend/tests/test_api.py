@@ -178,6 +178,41 @@ class TestImageAPI:
         )
         assert resp.status_code == 400
 
+    def test_image_negative_max_width_rejected(self, client, auth_headers):
+        """T3 图片压缩：max_width 负值应返回 400（防非法 resize 尺寸 -> 500）。"""
+        task = _create_task(client, auth_headers, task_name="压缩负值测试")
+        upload = client.post(
+            f"/api/v1/tasks/{task['id']}/images",
+            files={"files": ("nw.jpg", _make_jpeg(), "image/jpeg")},
+            headers=auth_headers,
+        )
+        image_id = upload.json()["images"][0]["id"]
+        for path in (
+            f"/api/v1/images/{image_id}?max_width=-1",
+            f"/api/v1/images/{image_id}/annotated?max_width=-5",
+        ):
+            assert client.get(path, headers=auth_headers).status_code == 400
+
+    def test_image_default_and_original_both_ok(self, client, auth_headers):
+        """T3：默认（压缩）与 max_width=0（原图）都应正常返回图片。"""
+        task = _create_task(client, auth_headers, task_name="压缩取图测试")
+        upload = client.post(
+            f"/api/v1/tasks/{task['id']}/images",
+            files={"files": ("c.jpg", _make_jpeg(size=(2400, 1600)), "image/jpeg")},
+            headers=auth_headers,
+        )
+        image_id = upload.json()["images"][0]["id"]
+        # 默认压缩版
+        r1 = client.get(f"/api/v1/images/{image_id}", headers=auth_headers)
+        assert r1.status_code == 200
+        assert r1.headers["content-type"].startswith("image/")
+        # 显式原图
+        r2 = client.get(
+            f"/api/v1/images/{image_id}?max_width=0", headers=auth_headers
+        )
+        assert r2.status_code == 200
+        assert r2.headers["content-type"].startswith("image/")
+
     def test_image_without_token_401(self, client):
         assert client.get("/api/v1/images/some-id/info").status_code == 401
 

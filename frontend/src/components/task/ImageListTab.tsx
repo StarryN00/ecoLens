@@ -42,6 +42,7 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
         <AuthedImage
           path={`/api/v1/images/${record.id}/thumbnail`}
           previewPath={`/api/v1/images/${record.id}`}
+          originalPath={`/api/v1/images/${record.id}?max_width=0`}
           alt={record.filename}
           style={{
             width: 100,
@@ -102,6 +103,7 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
         return (
           <AuthedImage
             path={`/api/v1/images/${record.id}/annotated`}
+            originalPath={`/api/v1/images/${record.id}/annotated?max_width=0`}
             alt="检测结果"
             style={{ width: 80, height: 60, objectFit: 'cover', cursor: 'pointer' }}
           />

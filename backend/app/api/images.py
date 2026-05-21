@@ -103,24 +103,58 @@ async def list_task_images(
 
 
 @router.get("/images/{image_id}")
-async def get_image_file(img: Image = Depends(get_owned_image)):
-    """获取图片文件（原图）。ownership 通过 get_owned_image 校验。
+async def get_image_file(
+    img: Image = Depends(get_owned_image),
+    max_width: int = 1920,
+):
+    """获取图片。ownership 通过 get_owned_image 校验。
+
+    T3 图片压缩：**默认**返回宽度上限 1920px 的压缩版（JPEG quality≈82），
+    无人机原图常达 10-20MB，压缩后通常 200-800KB，前端加载快一个数量级。
+    - `max_width=0`：返回未压缩原图（"查看原图"用）
+    - `max_width>0`：宽度超过该值才缩放，否则直接发原文件省一次重编码
+    - `max_width<0`：拒绝（400），防止 resize 计算出非法尺寸导致 500
 
     用 inline 而非 attachment：浏览器 / antd Image / blob URL 流程都把它
-    当成图片直接渲染；attachment 会让某些场景下被当作下载提示，行为不一致。
+    当成图片直接渲染。
     """
+    import io
     import os
 
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, StreamingResponse
+    from PIL import Image as PILImage
 
-    if os.path.exists(img.storage_path):
+    if max_width < 0:
+        raise HTTPException(status_code=400, detail="max_width 不能为负数")
+
+    if not os.path.exists(img.storage_path):
+        raise HTTPException(status_code=404, detail="图片文件不存在")
+
+    def _original():
         return FileResponse(
             img.storage_path,
             filename=img.filename,
             content_disposition_type="inline",
         )
 
-    raise HTTPException(status_code=404, detail="图片文件不存在")
+    # 显式要原图
+    if max_width == 0:
+        return _original()
+
+    pil = PILImage.open(img.storage_path)
+    # 原图本就不超过上限 → 直接发原文件，避免无谓重编码
+    if pil.width <= max_width:
+        return _original()
+
+    # 等比缩放到 max_width 宽 + JPEG 压缩
+    ratio = max_width / pil.width
+    pil = pil.convert("RGB").resize(
+        (max_width, max(1, int(pil.height * ratio))), PILImage.LANCZOS
+    )
+    buf = io.BytesIO()
+    pil.save(buf, format="JPEG", quality=82, optimize=True)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/jpeg")
 
 
 @router.get("/images/{image_id}/info")
@@ -173,8 +207,16 @@ async def get_image_thumbnail(img: Image = Depends(get_owned_image)):
 async def get_image_annotated(
     img: Image = Depends(get_owned_image),
     db: AsyncSession = Depends(get_db),
+    max_width: int = 1920,
 ):
-    """获取带检测框标注的图片。ownership 已校验。"""
+    """获取带检测框标注的图片。ownership 已校验。
+
+    T3 图片压缩：检测框始终在**原图分辨率**上绘制以保证坐标精度，绘制
+    完成后再按 max_width 统一缩放。
+    - `max_width=0`：标注后的全分辨率图
+    - `max_width>0`（默认 1920）：标注后缩放到该宽度上限
+    - `max_width<0`：拒绝（400）
+    """
     import io
     import os
 
@@ -183,6 +225,9 @@ async def get_image_annotated(
     from PIL import ImageDraw
 
     from app.models import RawNestDetection
+
+    if max_width < 0:
+        raise HTTPException(status_code=400, detail="max_width 不能为负数")
 
     if not os.path.exists(img.storage_path):
         raise HTTPException(status_code=404, detail="图片文件不存在")
@@ -193,8 +238,8 @@ async def get_image_annotated(
     )
     detections = result.scalars().all()
 
-    # 打开原图
-    image = PILImage.open(img.storage_path)
+    # 打开原图（convert RGB 防 RGBA/P 模式存 JPEG 失败）
+    image = PILImage.open(img.storage_path).convert("RGB")
     draw = ImageDraw.Draw(image)
     width, height = image.size
 
@@ -220,9 +265,16 @@ async def get_image_annotated(
         conf_text = f"{det.confidence:.2%}"
         draw.text((x1, y1 - 20), conf_text, fill=color)
 
-    # 保存到内存
+    # 画框完成后按 max_width 统一缩放压缩
+    if max_width > 0 and image.width > max_width:
+        ratio = max_width / image.width
+        image = image.resize(
+            (max_width, max(1, int(image.height * ratio))), PILImage.LANCZOS
+        )
+
+    # 保存到内存（quality 82，与 get_image_file 一致）
     img_io = io.BytesIO()
-    image.save(img_io, format="JPEG", quality=90)
+    image.save(img_io, format="JPEG", quality=82, optimize=True)
     img_io.seek(0)
 
     return StreamingResponse(img_io, media_type="image/jpeg")

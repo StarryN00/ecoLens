@@ -27,12 +27,17 @@ interface AuthedImageProps extends Omit<ImageProps, 'src' | 'preview'> {
   previewPath?: string;
   // 透传给 antd Image 的 preview 配置（src 由本组件管理，不要在外面传）
   previewExtra?: Omit<NonNullable<ImageProps['preview']>, 'src'>;
+  // T3 图片压缩：默认 path / previewPath 拿到的都是后端压缩版（1920px）。
+  // 传 originalPath（通常是 `...?max_width=0`）后，组件在图片右下角叠一个
+  // "原图" 按钮，点击带 token 取未压缩原图并在新标签打开。
+  originalPath?: string;
 }
 
 const AuthedImage: React.FC<AuthedImageProps> = ({
   path,
   previewPath,
   previewExtra,
+  originalPath,
   fallback,
   style,
   ...rest
@@ -43,6 +48,25 @@ const AuthedImage: React.FC<AuthedImageProps> = ({
   const [errored, setErrored] = useState(false);
   // 重试触发器：递增即重跑 effect
   const [retryToken, setRetryToken] = useState(0);
+  // "查看原图" 进行中标志，防止重复点击
+  const [openingOriginal, setOpeningOriginal] = useState(false);
+
+  const handleViewOriginal = async (e: React.MouseEvent) => {
+    // 阻止冒泡，否则会同时触发 antd Image 的放大预览
+    e.stopPropagation();
+    if (!originalPath || openingOriginal) return;
+    setOpeningOriginal(true);
+    try {
+      const url = await fetchAuthedImageUrl(originalPath);
+      // 新标签打开原图。blob URL 不立即 revoke——新标签还在用它，
+      // 交给该标签关闭时浏览器自行回收（用户手动触发，泄漏可忽略）。
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      // fetchAuthedImageUrl 内部已处理 401 跳转，这里静默
+    } finally {
+      setOpeningOriginal(false);
+    }
+  };
 
   useEffect(() => {
     // 每个 effect 闭包持有独立的 cancelled / mainUrl / previewUrl，
@@ -151,7 +175,7 @@ const AuthedImage: React.FC<AuthedImageProps> = ({
       ? { ...(previewExtra || {}), src }
       : false;
 
-  return (
+  const image = (
     <AntImage
       src={src}
       preview={previewConfig}
@@ -163,6 +187,40 @@ const AuthedImage: React.FC<AuthedImageProps> = ({
         setErrored(true);
       }}
     />
+  );
+
+  // 没有 originalPath：直接返回图片，行为与改造前一致
+  if (!originalPath) {
+    return image;
+  }
+
+  // 有 originalPath：包一层 relative 容器，右下角叠 "原图" 按钮
+  return (
+    <span style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
+      {image}
+      <button
+        type="button"
+        onClick={handleViewOriginal}
+        disabled={openingOriginal}
+        title="在新标签查看未压缩原图"
+        style={{
+          position: 'absolute',
+          right: 2,
+          bottom: 2,
+          padding: '1px 6px',
+          fontSize: 11,
+          lineHeight: '16px',
+          color: '#fff',
+          background: 'rgba(0,0,0,0.55)',
+          border: 'none',
+          borderRadius: 3,
+          cursor: openingOriginal ? 'wait' : 'pointer',
+        }}
+      >
+        <FileImageOutlined style={{ marginRight: 2 }} />
+        {openingOriginal ? '打开中' : '原图'}
+      </button>
+    </span>
   );
 };
 
