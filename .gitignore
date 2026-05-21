@@ -57,3 +57,6 @@ test9_result.jpg
 test_annotated.jpg
 pics/
 
+# 文档构建产物（由脚本生成，源码是 build_manual.py）
+docs/manual/OPERATION_MANUAL.docx
+
