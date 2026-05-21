@@ -61,7 +61,9 @@ export const authApi = {
 
 // 任务相关API
 export const taskApi = {
-  getTasks: () => api.get('/api/v1/tasks'),
+  // params 支持 { skip, limit, status, region_id } —— region_id 过滤在后端 WHERE
+  getTasks: (params?: Record<string, unknown>) =>
+    api.get('/api/v1/tasks', { params }),
   getTask: (id: string) => api.get(`/api/v1/tasks/${id}`),
   createTask: (data: any) => api.post('/api/v1/tasks', data),
   deleteTask: (id: string) => api.delete(`/api/v1/tasks/${id}`),
@@ -169,6 +171,20 @@ export const adminApi = {
     data: { is_active?: boolean; is_admin?: boolean; new_password?: string },
   ) => api.put(`/api/v1/admin/users/${id}`, data),
   deleteUser: (id: string) => api.delete(`/api/v1/admin/users/${id}`),
+};
+
+// 行政区域 API (T1 多级目录架构：市/区/街镇 三级树)
+export const regionApi = {
+  // 完整三级树：[{...city, children:[{...district, children:[town]}]}]
+  getTree: () => api.get('/api/v1/regions/tree'),
+  // 分层查询
+  list: (params?: { level?: string; parent_id?: string }) =>
+    api.get('/api/v1/regions/', { params }),
+  create: (data: { name: string; level: string; parent_id?: string }) =>
+    api.post('/api/v1/regions/', data),
+  update: (id: string, data: { name: string }) =>
+    api.put(`/api/v1/regions/${id}`, data),
+  remove: (id: string) => api.delete(`/api/v1/regions/${id}`),
 };
 
 export default api;

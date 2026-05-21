@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Dropdown, Space, message } from 'antd';
-import { UserOutlined, DownOutlined, LockOutlined, LogoutOutlined, TeamOutlined } from '@ant-design/icons';
+import { UserOutlined, DownOutlined, LockOutlined, LogoutOutlined, TeamOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -9,6 +9,7 @@ import TaskList from './pages/TaskList';
 import TaskCreate from './pages/TaskCreate';
 import TaskDetail from './pages/TaskDetail';
 import UserAdmin from './pages/admin/UserAdmin';
+import RegionAdmin from './pages/admin/RegionAdmin';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import { authApi } from './services/api';
 import './App.css';
@@ -54,6 +55,12 @@ const UserMenu: React.FC = () => {
             label: '用户管理',
             icon: <TeamOutlined />,
             onClick: () => navigate('/admin/users'),
+          },
+          {
+            key: 'admin-regions',
+            label: '区域管理',
+            icon: <EnvironmentOutlined />,
+            onClick: () => navigate('/admin/regions'),
           },
           { type: 'divider' as const },
         ]
@@ -190,6 +197,16 @@ function App() {
             <AdminRoute>
               <MainLayout>
                 <UserAdmin />
+              </MainLayout>
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/regions"
+          element={
+            <AdminRoute>
+              <MainLayout>
+                <RegionAdmin />
               </MainLayout>
             </AdminRoute>
           }

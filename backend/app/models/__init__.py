@@ -42,6 +42,32 @@ class User(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class Region(Base):
+    """行政区域表 —— 市 / 区 / 街镇 三级树形结构（T1 多级目录架构）。
+
+    - level: 'city' | 'district' | 'town'，三级
+    - parent_id: 自引用外键。city 的 parent_id 为 NULL；district 指向 city；
+      town 指向 district。
+    - full_path: 冗余存完整路径 "上海市/浦东新区/陆家嘴街道"，方便任务列表 /
+      详情 / 报告直接展示，不必每次回溯父链。
+    巡检任务挂在 level=='town' 的叶子节点上（API 层强制）。
+    """
+
+    __tablename__ = "regions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(100), nullable=False)
+    level = Column(String(10), nullable=False)  # city / district / town
+    parent_id = Column(
+        String(36), ForeignKey("regions.id"), nullable=True, index=True
+    )
+    full_path = Column(String(500))
+    created_at = Column(DateTime, default=func.now())
+
+    # remote_side=[id] 指明自引用的"一"端是 id
+    parent = relationship("Region", remote_side=[id], backref="children")
+
+
 class InspectionTask(Base):
     """巡检任务表"""
 
@@ -61,6 +87,12 @@ class InspectionTask(Base):
     owner = relationship("User")
     plot_area_mu = Column(Float, nullable=True)
     forestry_sub_compartment = Column(String(50), nullable=True)
+    # T1 多级目录：任务挂在 town 级区域上。模型层 nullable=True（存量任务
+    # 没有 region 且无法回填）；"创建任务必须选完整三级" 由 API 层强制。
+    region_id = Column(
+        String(36), ForeignKey("regions.id"), index=True, nullable=True
+    )
+    region = relationship("Region")
     status = Column(
         String(20), default="uploading"
     )  # uploading/processing/completed/failed

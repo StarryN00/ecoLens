@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # 显式引入 models 以确保 SQLAlchemy 的 Base.metadata 在 init_db 时能创建 users 表
 from app import models  # noqa: F401
-from app.api import admin_users, auth, images, nests, tasks
+from app.api import admin_users, auth, images, nests, regions, tasks
 from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.logging_config import configure_logging
@@ -64,6 +64,7 @@ app.include_router(tasks.router)
 app.include_router(images.router)
 app.include_router(nests.router)
 app.include_router(admin_users.router)
+app.include_router(regions.router)
 
 
 @app.get("/")

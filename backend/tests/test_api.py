@@ -1,13 +1,14 @@
 """任务 / 图片 / 虫巢 / 健康检查 API 测试。
 
-P0 给所有数据接口加了 JWT 鉴权、P1 加了 per-user ownership，本文件已
-按新体系重写：
-  - 不再连硬编码的 PostgreSQL 测试库，改用 conftest.py 的 SQLite 配置
-  - 所有受保护接口都通过 auth_headers fixture 带 Bearer token
-  - 新增 ownership 隔离测试（A 用户看不到 B 用户的任务）
+P0 给所有数据接口加了 JWT 鉴权、P1 加了 per-user ownership、T1 让任务创建
+强制绑定 town 级区域，本文件按新体系维护：
+  - SQLite 测试库（见 conftest.py）
+  - 所有受保护接口通过 auth_headers fixture 带 Bearer token
+  - 建任务需要合法 region_id —— 用 conftest 的 town_region_id fixture
+  - ownership 隔离测试（A 用户看不到 B 用户的任务）
 
-通用 fixture（client / unique_user / auth_headers / second_auth_headers）
-定义在 tests/conftest.py。
+通用 fixture（client / auth_headers / second_auth_headers / admin_auth_headers
+/ town_region_id）定义在 tests/conftest.py。
 """
 
 import io
@@ -23,9 +24,17 @@ def _make_jpeg(color="red", size=(120, 120)):
     return buf
 
 
-def _create_task(client, headers, **overrides):
-    """创建一个任务并返回响应 JSON。"""
-    body = {"task_name": "测试任务", "area_name": "测试公园", "operator": "测试员"}
+def _create_task(client, headers, region_id, **overrides):
+    """创建一个任务并返回响应 JSON。
+
+    region_id 必填——T1 后端强制任务归属到一个 town 级区域。
+    """
+    body = {
+        "task_name": "测试任务",
+        "area_name": "测试公园",
+        "operator": "测试员",
+        "region_id": region_id,
+    }
     body.update(overrides)
     resp = client.post("/api/v1/tasks/", json=body, headers=headers)
     assert resp.status_code == 200, resp.text
@@ -35,17 +44,25 @@ def _create_task(client, headers, **overrides):
 class TestTaskAPI:
     """任务 API。"""
 
-    def test_create_task(self, client, auth_headers):
-        data = _create_task(client, auth_headers, task_name="创建测试")
+    def test_create_task(self, client, auth_headers, town_region_id):
+        data = _create_task(
+            client, auth_headers, town_region_id, task_name="创建测试"
+        )
         assert data["task_name"] == "创建测试"
         assert data["status"] == "uploading"
-        assert "id" in data
+        assert data["id"]
+        # T1：返回带区域信息
+        assert data["region_id"] == town_region_id
+        assert data["region_path"]
 
-    def test_create_task_with_plot_fields(self, client, auth_headers):
+    def test_create_task_with_plot_fields(
+        self, client, auth_headers, town_region_id
+    ):
         """T2 字段：地块面积 + 林业局小班号能正确写入并回显。"""
         data = _create_task(
             client,
             auth_headers,
+            town_region_id,
             task_name="地块字段测试",
             plot_area_mu=12.5,
             forestry_sub_compartment="A-12-3",
@@ -53,23 +70,31 @@ class TestTaskAPI:
         assert data["plot_area_mu"] == 12.5
         assert data["forestry_sub_compartment"] == "A-12-3"
 
-    def test_get_task(self, client, auth_headers):
-        created = _create_task(client, auth_headers, task_name="查询测试")
+    def test_get_task(self, client, auth_headers, town_region_id):
+        created = _create_task(
+            client, auth_headers, town_region_id, task_name="查询测试"
+        )
         resp = client.get(f"/api/v1/tasks/{created['id']}", headers=auth_headers)
         assert resp.status_code == 200
-        assert resp.json()["task_name"] == "查询测试"
+        body = resp.json()
+        assert body["task_name"] == "查询测试"
+        assert body["region_path"]
 
-    def test_list_tasks(self, client, auth_headers):
+    def test_list_tasks(self, client, auth_headers, town_region_id):
         for i in range(3):
-            _create_task(client, auth_headers, task_name=f"列表任务{i}")
+            _create_task(
+                client, auth_headers, town_region_id, task_name=f"列表任务{i}"
+            )
         resp = client.get("/api/v1/tasks/", headers=auth_headers)
         assert resp.status_code == 200
         body = resp.json()
         assert "items" in body
         assert len(body["items"]) >= 3
 
-    def test_get_task_status(self, client, auth_headers):
-        created = _create_task(client, auth_headers, task_name="状态测试")
+    def test_get_task_status(self, client, auth_headers, town_region_id):
+        created = _create_task(
+            client, auth_headers, town_region_id, task_name="状态测试"
+        )
         resp = client.get(
             f"/api/v1/tasks/{created['id']}/status", headers=auth_headers
         )
@@ -78,13 +103,14 @@ class TestTaskAPI:
         assert body["status"] == "uploading"
         assert "progress" in body
 
-    def test_delete_task(self, client, auth_headers):
-        created = _create_task(client, auth_headers, task_name="删除测试")
+    def test_delete_task(self, client, auth_headers, town_region_id):
+        created = _create_task(
+            client, auth_headers, town_region_id, task_name="删除测试"
+        )
         resp = client.delete(
             f"/api/v1/tasks/{created['id']}", headers=auth_headers
         )
         assert resp.status_code == 200
-        # 删除后再查应 404
         gone = client.get(f"/api/v1/tasks/{created['id']}", headers=auth_headers)
         assert gone.status_code == 404
 
@@ -100,24 +126,27 @@ class TestTaskAuthAndOwnership:
         assert client.get("/api/v1/tasks/").status_code == 401
 
     def test_other_user_cannot_read_task(
-        self, client, auth_headers, second_auth_headers
+        self, client, auth_headers, second_auth_headers, town_region_id
     ):
         """A 创建的任务，B 读不到（404 防枚举）。"""
-        created = _create_task(client, auth_headers, task_name="A的私有任务")
+        created = _create_task(
+            client, auth_headers, town_region_id, task_name="A的私有任务"
+        )
         resp = client.get(
             f"/api/v1/tasks/{created['id']}", headers=second_auth_headers
         )
         assert resp.status_code == 404
 
     def test_other_user_cannot_delete_task(
-        self, client, auth_headers, second_auth_headers
+        self, client, auth_headers, second_auth_headers, town_region_id
     ):
-        created = _create_task(client, auth_headers, task_name="A的待删任务")
+        created = _create_task(
+            client, auth_headers, town_region_id, task_name="A的待删任务"
+        )
         resp = client.delete(
             f"/api/v1/tasks/{created['id']}", headers=second_auth_headers
         )
         assert resp.status_code == 404
-        # 确认 A 仍能看到（B 的越权删除没生效）
         still = client.get(
             f"/api/v1/tasks/{created['id']}", headers=auth_headers
         )
@@ -127,8 +156,10 @@ class TestTaskAuthAndOwnership:
 class TestImageAPI:
     """图片上传与查询。"""
 
-    def test_upload_image(self, client, auth_headers):
-        task = _create_task(client, auth_headers, task_name="上传测试")
+    def test_upload_image(self, client, auth_headers, town_region_id):
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="上传测试"
+        )
         resp = client.post(
             f"/api/v1/tasks/{task['id']}/images",
             files={"files": ("test.jpg", _make_jpeg(), "image/jpeg")},
@@ -139,8 +170,10 @@ class TestImageAPI:
         assert body["uploaded"] == 1
         assert len(body["images"]) == 1
 
-    def test_list_task_images(self, client, auth_headers):
-        task = _create_task(client, auth_headers, task_name="图片列表测试")
+    def test_list_task_images(self, client, auth_headers, town_region_id):
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="图片列表测试"
+        )
         client.post(
             f"/api/v1/tasks/{task['id']}/images",
             files={"files": ("a.jpg", _make_jpeg(color="blue"), "image/jpeg")},
@@ -152,9 +185,11 @@ class TestImageAPI:
         assert resp.status_code == 200
         assert "items" in resp.json()
 
-    def test_get_image_info(self, client, auth_headers):
+    def test_get_image_info(self, client, auth_headers, town_region_id):
         """/images/{id}/info 返回 JSON 元数据（/images/{id} 返回的是文件）。"""
-        task = _create_task(client, auth_headers, task_name="图片详情测试")
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="图片详情测试"
+        )
         upload = client.post(
             f"/api/v1/tasks/{task['id']}/images",
             files={"files": ("detail.jpg", _make_jpeg(), "image/jpeg")},
@@ -167,9 +202,13 @@ class TestImageAPI:
         assert resp.status_code == 200
         assert resp.json()["filename"] == "detail.jpg"
 
-    def test_upload_rejects_non_image(self, client, auth_headers):
+    def test_upload_rejects_non_image(
+        self, client, auth_headers, town_region_id
+    ):
         """P0 上传校验：非图片后缀应被拒。"""
-        task = _create_task(client, auth_headers, task_name="非法上传测试")
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="非法上传测试"
+        )
         bad = io.BytesIO(b"this is not an image")
         resp = client.post(
             f"/api/v1/tasks/{task['id']}/images",
@@ -178,9 +217,13 @@ class TestImageAPI:
         )
         assert resp.status_code == 400
 
-    def test_image_negative_max_width_rejected(self, client, auth_headers):
+    def test_image_negative_max_width_rejected(
+        self, client, auth_headers, town_region_id
+    ):
         """T3 图片压缩：max_width 负值应返回 400（防非法 resize 尺寸 -> 500）。"""
-        task = _create_task(client, auth_headers, task_name="压缩负值测试")
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="压缩负值测试"
+        )
         upload = client.post(
             f"/api/v1/tasks/{task['id']}/images",
             files={"files": ("nw.jpg", _make_jpeg(), "image/jpeg")},
@@ -193,20 +236,22 @@ class TestImageAPI:
         ):
             assert client.get(path, headers=auth_headers).status_code == 400
 
-    def test_image_default_and_original_both_ok(self, client, auth_headers):
+    def test_image_default_and_original_both_ok(
+        self, client, auth_headers, town_region_id
+    ):
         """T3：默认（压缩）与 max_width=0（原图）都应正常返回图片。"""
-        task = _create_task(client, auth_headers, task_name="压缩取图测试")
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="压缩取图测试"
+        )
         upload = client.post(
             f"/api/v1/tasks/{task['id']}/images",
             files={"files": ("c.jpg", _make_jpeg(size=(2400, 1600)), "image/jpeg")},
             headers=auth_headers,
         )
         image_id = upload.json()["images"][0]["id"]
-        # 默认压缩版
         r1 = client.get(f"/api/v1/images/{image_id}", headers=auth_headers)
         assert r1.status_code == 200
         assert r1.headers["content-type"].startswith("image/")
-        # 显式原图
         r2 = client.get(
             f"/api/v1/images/{image_id}?max_width=0", headers=auth_headers
         )
@@ -220,8 +265,10 @@ class TestImageAPI:
 class TestNestsAPI:
     """虫巢查询 / 结果 / 统计。"""
 
-    def test_get_task_nests_empty(self, client, auth_headers):
-        task = _create_task(client, auth_headers, task_name="虫巢空列表")
+    def test_get_task_nests_empty(self, client, auth_headers, town_region_id):
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="虫巢空列表"
+        )
         resp = client.get(
             f"/api/v1/tasks/{task['id']}/nests", headers=auth_headers
         )
@@ -238,16 +285,24 @@ class TestNestsAPI:
         )
         assert resp.status_code == 404
 
-    def test_get_task_results_empty(self, client, auth_headers):
-        task = _create_task(client, auth_headers, task_name="空结果")
+    def test_get_task_results_empty(
+        self, client, auth_headers, town_region_id
+    ):
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="空结果"
+        )
         resp = client.get(
             f"/api/v1/tasks/{task['id']}/results", headers=auth_headers
         )
         assert resp.status_code == 200
         assert resp.json()["task_id"] == task["id"]
 
-    def test_get_task_statistics_empty(self, client, auth_headers):
-        task = _create_task(client, auth_headers, task_name="空统计")
+    def test_get_task_statistics_empty(
+        self, client, auth_headers, town_region_id
+    ):
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="空统计"
+        )
         resp = client.get(
             f"/api/v1/tasks/{task['id']}/statistics", headers=auth_headers
         )

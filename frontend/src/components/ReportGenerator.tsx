@@ -19,6 +19,7 @@ interface ReportData {
   task_name: string;
   area_name: string;
   operator: string;
+  region_path?: string;
   plot_area_mu?: number | null;
   forestry_sub_compartment?: string | null;
   created_at: string;
@@ -45,18 +46,19 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     // 基本信息
     doc.setFontSize(12);
     doc.text(`任务名称: ${data.task_name}`, 20, 40);
-    doc.text(`巡检区域: ${data.area_name || '-'}`, 20, 50);
-    doc.text(`操作员: ${data.operator || '-'}`, 20, 60);
-    doc.text(`地块面积: ${data.plot_area_mu != null ? `${data.plot_area_mu} 亩` : '-'}`, 20, 70);
-    doc.text(`林业局小班号: ${data.forestry_sub_compartment || '-'}`, 20, 80);
-    doc.text(`创建时间: ${new Date(data.created_at).toLocaleString()}`, 20, 90);
-    doc.text(`完成时间: ${data.completed_at ? new Date(data.completed_at).toLocaleString() : '-'}`, 20, 100);
+    doc.text(`所属区域: ${data.region_path || '-'}`, 20, 50);
+    doc.text(`巡检区域说明: ${data.area_name || '-'}`, 20, 60);
+    doc.text(`操作员: ${data.operator || '-'}`, 20, 70);
+    doc.text(`地块面积: ${data.plot_area_mu != null ? `${data.plot_area_mu} 亩` : '-'}`, 20, 80);
+    doc.text(`林业局小班号: ${data.forestry_sub_compartment || '-'}`, 20, 90);
+    doc.text(`创建时间: ${new Date(data.created_at).toLocaleString()}`, 20, 100);
+    doc.text(`完成时间: ${data.completed_at ? new Date(data.completed_at).toLocaleString() : '-'}`, 20, 110);
 
     // 统计信息
-    doc.text('统计信息', 20, 115);
-    doc.text(`图片总数: ${data.total_images}`, 30, 125);
-    doc.text(`已处理: ${data.processed_images}`, 30, 135);
-    doc.text(`发现虫巢: ${data.nests.length} 个`, 30, 145);
+    doc.text('统计信息', 20, 125);
+    doc.text(`图片总数: ${data.total_images}`, 30, 135);
+    doc.text(`已处理: ${data.processed_images}`, 30, 145);
+    doc.text(`发现虫巢: ${data.nests.length} 个`, 30, 155);
     
     // 虫巢列表表格
     const tableData = data.nests.map(nest => [
@@ -69,7 +71,7 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     ]);
     
     (doc as any).autoTable({
-      startY: 160,
+      startY: 170,
       head: [['编号', '纬度', '经度', '严重程度', '置信度', '检测次数']],
       body: tableData,
       theme: 'grid',
@@ -87,7 +89,8 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     // 基本信息sheet
     const infoData = [
       ['任务名称', data.task_name],
-      ['巡检区域', data.area_name || '-'],
+      ['所属区域', data.region_path || '-'],
+      ['巡检区域说明', data.area_name || '-'],
       ['操作员', data.operator || '-'],
       ['地块面积', data.plot_area_mu != null ? `${data.plot_area_mu} 亩` : '-'],
       ['林业局小班号', data.forestry_sub_compartment || '-'],

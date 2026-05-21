@@ -1,11 +1,45 @@
-import React, { useState } from 'react';
-import { Form, Input, InputNumber, Button, Card, Upload, message, Steps } from 'antd';
+import React, { useEffect, useState } from 'react';
+import {
+  Form,
+  Input,
+  InputNumber,
+  Button,
+  Card,
+  Cascader,
+  Upload,
+  message,
+  Steps,
+  Alert,
+} from 'antd';
 import { UploadOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { taskApi } from '../services/api';
+import { regionApi, taskApi } from '../services/api';
 
 const { Step } = Steps;
-const { TextArea } = Input;
+
+interface RegionNode {
+  id: string;
+  name: string;
+  level: string;
+  children?: RegionNode[];
+}
+
+interface CascaderOption {
+  value: string;
+  label: string;
+  children?: CascaderOption[];
+}
+
+// 区域树 -> antd Cascader options。town 级无 children => 成为可选叶子。
+const toCascaderOptions = (nodes: RegionNode[]): CascaderOption[] =>
+  nodes.map((n) => ({
+    value: n.id,
+    label: n.name,
+    children:
+      n.children && n.children.length > 0
+        ? toCascaderOptions(n.children)
+        : undefined,
+  }));
 
 const TaskCreate: React.FC = () => {
   const [form] = Form.useForm();
@@ -13,16 +47,46 @@ const TaskCreate: React.FC = () => {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [fileList, setFileList] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [regionOptions, setRegionOptions] = useState<CascaderOption[]>([]);
+  const [regionLoaded, setRegionLoaded] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    regionApi
+      .getTree()
+      .then((data: any) => {
+        if (!cancelled) {
+          setRegionOptions(toCascaderOptions(data?.items || []));
+          setRegionLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRegionLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCreateTask = async (values: any) => {
     try {
-      const result = await taskApi.createTask(values);
+      const { region_cascade, ...rest } = values;
+      // Cascader value 是 [cityId, districtId, townId]，取最后一级 town id
+      const region_id =
+        Array.isArray(region_cascade) && region_cascade.length > 0
+          ? region_cascade[region_cascade.length - 1]
+          : undefined;
+      const result = await taskApi.createTask({ ...rest, region_id });
       setTaskId(result.id);
       setCurrentStep(1);
       message.success('任务创建成功');
-    } catch (error) {
-      message.error('创建任务失败');
+    } catch (error: any) {
+      // 后端 400/422 的 detail 直接透出，便于用户知道是区域没选对
+      const detail = error?.response?.data?.detail;
+      message.error(
+        typeof detail === 'string' ? detail : '创建任务失败',
+      );
     }
   };
 
@@ -57,23 +121,19 @@ const TaskCreate: React.FC = () => {
       setFileList(newFileList);
     },
     beforeUpload: (file: any) => {
-      setFileList(prev => [...prev, file]);
+      setFileList((prev) => [...prev, file]);
       return false;
     },
     fileList,
     multiple: true,
-    accept: '.jpg,.jpeg,.png'
+    accept: '.jpg,.jpeg,.png',
   };
 
   const renderStepContent = () => {
     switch (currentStep) {
       case 0:
         return (
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={handleCreateTask}
-          >
+          <Form form={form} layout="vertical" onFinish={handleCreateTask}>
             <Form.Item
               label="任务名称"
               name="task_name"
@@ -82,24 +142,47 @@ const TaskCreate: React.FC = () => {
               <Input placeholder="例如: XX公园巡检" />
             </Form.Item>
 
-            <Form.Item
-              label="巡检区域"
-              name="area_name"
-            >
-              <Input placeholder="例如: 人民公园" />
-            </Form.Item>
+            {regionLoaded && regionOptions.length === 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="尚无行政区域"
+                description="请先让管理员在「区域管理」中创建 市/区/街镇 三级目录，任务必须归属到一个街镇。"
+              />
+            )}
 
             <Form.Item
-              label="操作员"
-              name="operator"
+              label="所属区域（市 / 区 / 街镇）"
+              name="region_cascade"
+              rules={[
+                { required: true, message: '请选择完整的 市/区/街镇' },
+                {
+                  validator: (_: any, value: any) =>
+                    Array.isArray(value) && value.length === 3
+                      ? Promise.resolve()
+                      : Promise.reject(
+                          new Error('必须选到街镇级（完整三级）'),
+                        ),
+                },
+              ]}
             >
+              <Cascader
+                options={regionOptions}
+                placeholder="依次选择 市 → 区 → 街镇"
+                expandTrigger="hover"
+              />
+            </Form.Item>
+
+            <Form.Item label="巡检区域说明" name="area_name">
+              <Input placeholder="例如: 人民公园（可选，自由描述）" />
+            </Form.Item>
+
+            <Form.Item label="操作员" name="operator">
               <Input placeholder="操作员姓名" />
             </Form.Item>
 
-            <Form.Item
-              label="地块面积"
-              name="plot_area_mu"
-            >
+            <Form.Item label="地块面积" name="plot_area_mu">
               <InputNumber
                 min={0}
                 precision={2}
@@ -109,10 +192,7 @@ const TaskCreate: React.FC = () => {
               />
             </Form.Item>
 
-            <Form.Item
-              label="林业局小班号"
-              name="forestry_sub_compartment"
-            >
+            <Form.Item label="林业局小班号" name="forestry_sub_compartment">
               <Input placeholder="例如: A-12-3（可选）" />
             </Form.Item>
 

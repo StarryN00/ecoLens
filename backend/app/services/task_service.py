@@ -21,12 +21,15 @@ class TaskService:
         owner_id: Optional[str] = None,
         plot_area_mu: Optional[float] = None,
         forestry_sub_compartment: Optional[str] = None,
+        region_id: Optional[str] = None,
     ) -> InspectionTask:
         """创建巡检任务。
 
         owner_id 由路由层从 current_user 注入；服务层不再自动 fallback —
         DB 列 NOT NULL，缺失会在 commit 时炸出 IntegrityError，比静默
         留个 NULL 主席更安全。
+
+        region_id 由路由层校验（必须指向 town 级区域）后注入。
         """
         task = InspectionTask(
             task_name=task_name,
@@ -35,6 +38,7 @@ class TaskService:
             owner_id=owner_id,
             plot_area_mu=plot_area_mu,
             forestry_sub_compartment=forestry_sub_compartment,
+            region_id=region_id,
             status="uploading",
         )
         self.db.add(task)
@@ -57,11 +61,14 @@ class TaskService:
         limit: int = 20,
         status: Optional[str] = None,
         owner_id: Optional[str] = None,
+        region_id: Optional[str] = None,
     ) -> List[InspectionTask]:
         """查询任务列表。
 
         owner_id 非空时按 owner 过滤（普通用户只看自己的任务）；
         None 表示不过滤（admin 视图）。
+        region_id 非空时按区域过滤——**在数据库层 WHERE**，不是前端拿到
+        分页结果后再筛，否则会漏掉不在当前页的匹配任务。
         """
         query = select(InspectionTask).order_by(desc(InspectionTask.created_at))
 
@@ -69,6 +76,8 @@ class TaskService:
             query = query.where(InspectionTask.status == status)
         if owner_id is not None:
             query = query.where(InspectionTask.owner_id == owner_id)
+        if region_id:
+            query = query.where(InspectionTask.region_id == region_id)
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)

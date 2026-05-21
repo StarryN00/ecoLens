@@ -22,7 +22,10 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
         <Descriptions bordered column={2}>
           <Descriptions.Item label="任务名称">{task.task_name}</Descriptions.Item>
           <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
-          <Descriptions.Item label="巡检区域">{task.area_name || '-'}</Descriptions.Item>
+          <Descriptions.Item label="所属区域" span={2}>
+            {task.region_path || '未分配'}
+          </Descriptions.Item>
+          <Descriptions.Item label="巡检区域说明">{task.area_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="操作员">{task.operator || '-'}</Descriptions.Item>
           <Descriptions.Item label="地块面积">
             {task.plot_area_mu != null ? `${task.plot_area_mu} 亩` : '-'}
@@ -111,6 +114,7 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
           task_name: task.task_name,
           area_name: task.area_name,
           operator: task.operator,
+          region_path: task.region_path ?? undefined,
           plot_area_mu: task.plot_area_mu,
           forestry_sub_compartment: task.forestry_sub_compartment,
           created_at: task.created_at,

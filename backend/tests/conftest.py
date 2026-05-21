@@ -21,13 +21,16 @@ os.environ.setdefault(
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 
 # env 在 import app 前可能已被 lru_cache 缓存，清掉确保生效
 get_settings.cache_clear()
 
+from app.core.database import SyncSessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models import User  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -94,3 +97,67 @@ def second_auth_headers(client):
     }
     token = register_and_login(client, user)
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def admin_auth_headers(client):
+    """注册一个用户、直接改 DB 提升为 admin、返回带 token 的 headers。
+
+    token 在提升前签发也无妨：is_admin 不编码进 token，每次请求由
+    get_current_user 重新查 DB，提升后立即生效。
+    """
+    suffix = uuid.uuid4().hex[:8]
+    user = {
+        "username": f"admin_{suffix}",
+        "password": "Passw0rd!",
+        "email": f"a_{suffix}@example.com",
+    }
+    token = register_and_login(client, user)
+    with SyncSessionLocal() as db:
+        u = db.execute(
+            select(User).where(User.username == user["username"])
+        ).scalar_one()
+        u.is_admin = True
+        db.commit()
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def town_region_id(client):
+    """session 级：建一条完整 市/区/街镇 链，返回 town（街镇）id。
+
+    T1 之后任务创建强制 region_id 指向 town 级区域，凡是要建任务的测试
+    都需要一个合法 town id。session 域建一次复用，避免重复建树。
+    """
+    suffix = uuid.uuid4().hex[:8]
+    user = {
+        "username": f"regadmin_{suffix}",
+        "password": "Passw0rd!",
+        "email": f"ra_{suffix}@example.com",
+    }
+    token = register_and_login(client, user)
+    with SyncSessionLocal() as db:
+        u = db.execute(
+            select(User).where(User.username == user["username"])
+        ).scalar_one()
+        u.is_admin = True
+        db.commit()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    sfx = uuid.uuid4().hex[:6]
+    city = client.post(
+        "/api/v1/regions/",
+        json={"name": f"市{sfx}", "level": "city"},
+        headers=headers,
+    ).json()
+    district = client.post(
+        "/api/v1/regions/",
+        json={"name": f"区{sfx}", "level": "district", "parent_id": city["id"]},
+        headers=headers,
+    ).json()
+    town = client.post(
+        "/api/v1/regions/",
+        json={"name": f"镇{sfx}", "level": "town", "parent_id": district["id"]},
+        headers=headers,
+    ).json()
+    return town["id"]
