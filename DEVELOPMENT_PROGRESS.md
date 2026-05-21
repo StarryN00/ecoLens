@@ -39,7 +39,7 @@ Verdict flow per task:
 | W3 | done | b3dc826 | 2026-05-21 | 重写 test_api/test_inference 适配鉴权 + CI 解除 ignore + 全项目 ruff 清理；Codex PASS，py3.11 下 133 passed |
 | W4 | manual | — | 2026-05-19 | 需 user 手动 SSH + rsync `.pt` 文件到生产 models/ + restart PM2 |
 | T3 | done | c2d7e36 | 2026-05-21 | 后端默认压缩 max_width=1920（quality 82）+ max_width=0 取原图；前端 AuthedImage "原图"按钮；Codex PASS |
-| T1 | pending | — | — | 多级目录架构，人工进行中 |
+| T1 | done | 5dc049e | 2026-05-21 | 市/区/街镇 三级区域全栈：Region 模型+regions API+迁移；任务强制 town 级；TaskList 后端筛选；Cascader+RegionAdmin 页；Codex PASS，153 passed |
 
 ## T3 / T1 实现要点（来自 Codex 历次审核反馈）
 
