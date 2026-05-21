@@ -58,13 +58,7 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
     };
   }, [imageUrl, visible]);
 
-  React.useEffect(() => {
-    if (visible && imageLoaded && canvasRef.current) {
-      drawAnnotations();
-    }
-  }, [visible, imageLoaded, detections]);
-
-  const drawAnnotations = () => {
+  const drawAnnotations = React.useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -94,7 +88,7 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
       ctx.font = 'bold 14px Arial';
       const textMetrics = ctx.measureText(label);
       const textHeight = 20;
-      
+
       ctx.fillStyle = color;
       ctx.fillRect(x, y - textHeight, textMetrics.width + 10, textHeight);
 
@@ -102,7 +96,13 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
       ctx.fillStyle = '#fff';
       ctx.fillText(label, x + 5, y - 5);
     });
-  };
+  }, [detections]);
+
+  React.useEffect(() => {
+    if (visible && imageLoaded && canvasRef.current) {
+      drawAnnotations();
+    }
+  }, [visible, imageLoaded, drawAnnotations]);
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -117,7 +117,7 @@ const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
       onCancel={onClose}
       footer={null}
       width={1000}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <Image

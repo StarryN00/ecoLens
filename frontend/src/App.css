@@ -5,11 +5,481 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #eef4ef;
+  color: #16251d;
 }
 
 #root {
   min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(31, 122, 77, 0.08), transparent 32%),
+    #eef4ef;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  width: 248px;
+  height: 100vh;
+  padding: 20px 14px;
+  border-right: 1px solid #dce8de;
+  background: #f8fbf7;
+}
+
+.brand-mark {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px 20px;
+}
+
+.brand-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: #fff;
+  background: #1f7a4d;
+  border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(31, 122, 77, 0.22);
+}
+
+.brand-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #14251c;
+  line-height: 1.2;
+}
+
+.brand-subtitle {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #6c7b70;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.side-nav.ant-menu {
+  border-inline-end: 0;
+  background: transparent;
+}
+
+.side-nav .ant-menu-item {
+  height: 42px;
+  margin-inline: 0;
+  border-radius: 8px;
+  color: #415346;
+}
+
+.side-nav .ant-menu-item-selected {
+  color: #135f3a;
+  background: #e3f1e7;
+  font-weight: 650;
+}
+
+.app-main {
+  min-width: 0;
+  background: transparent;
+}
+
+.app-header {
+  height: 72px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #dce8de;
+  background: rgba(248, 251, 247, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.app-kicker {
+  display: block;
+  color: #607065;
+  font-size: 12px;
+}
+
+.app-header-title {
+  margin-top: 2px;
+  color: #16251d;
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  color: #16251d;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.user-menu-trigger:hover {
+  color: #1f7a4d;
+  background: #edf5ef;
+}
+
+.user-menu-avatar {
+  color: #1f7a4d;
+  background: #e3f1e7;
+}
+
+.app-content {
+  min-width: 0;
+  padding: 24px 28px 32px;
+}
+
+.eco-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.eco-page-header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.eco-eyebrow {
+  margin-bottom: 6px;
+  color: #607065;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.eco-page-title {
+  margin: 0;
+  color: #14251c;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.eco-page-desc {
+  max-width: 760px;
+  margin-top: 8px;
+  color: #607065;
+  font-size: 14px;
+}
+
+.eco-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.eco-panel {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid #dce8de;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(25, 52, 37, 0.06);
+}
+
+.eco-panel .ant-card-body {
+  min-width: 0;
+}
+
+.eco-panel .ant-table-wrapper {
+  max-width: 100%;
+}
+
+.eco-panel .ant-card-head {
+  border-bottom-color: #e6eee7;
+}
+
+.eco-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.eco-filter {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-card {
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid #dce8de;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.metric-card.risk {
+  border-color: #f1c8bd;
+  background: #fff7f4;
+}
+
+.metric-label {
+  color: #607065;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.metric-value {
+  margin-top: 8px;
+  color: #14251c;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.metric-hint {
+  margin-top: 8px;
+  color: #6c7b70;
+  font-size: 12px;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+}
+
+.workspace-grid > * {
+  min-width: 0;
+}
+
+.map-preview {
+  position: relative;
+  min-height: 288px;
+  overflow: hidden;
+  border: 1px solid #dce8de;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(31, 122, 77, 0.24), transparent 9%),
+    radial-gradient(circle at 62% 44%, rgba(217, 119, 6, 0.18), transparent 7%),
+    radial-gradient(circle at 50% 68%, rgba(31, 122, 77, 0.16), transparent 10%),
+    linear-gradient(145deg, #e4efe6, #f8fbf7 62%);
+}
+
+.map-preview::before {
+  content: '';
+  position: absolute;
+  inset: 28px;
+  border: 1px dashed rgba(31, 122, 77, 0.28);
+  border-radius: 46% 54% 44% 56%;
+}
+
+.map-marker {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #c2413b;
+  box-shadow: 0 0 0 5px rgba(194, 65, 59, 0.15);
+}
+
+.map-marker.one {
+  top: 35%;
+  left: 42%;
+}
+
+.map-marker.two {
+  top: 58%;
+  left: 62%;
+  background: #d97706;
+  box-shadow: 0 0 0 5px rgba(217, 119, 6, 0.15);
+}
+
+.map-marker.three {
+  top: 47%;
+  left: 52%;
+}
+
+.thumbnail-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+}
+
+.thumb-tile {
+  min-height: 82px;
+  border: 1px solid #dce8de;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(31, 122, 77, 0.24), transparent),
+    linear-gradient(45deg, #6f8f65, #d9e5d4);
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(380px, 0.8fr);
+  background: #eef4ef;
+}
+
+.auth-visual {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 56px;
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(13, 41, 29, 0.18), rgba(13, 41, 29, 0.82)),
+    linear-gradient(135deg, #265f3f, #94aa75);
+}
+
+.auth-visual::before {
+  content: '';
+  position: absolute;
+  inset: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+}
+
+.auth-title {
+  position: relative;
+  max-width: 640px;
+  font-size: 40px;
+  font-weight: 850;
+  line-height: 1.16;
+}
+
+.auth-copy {
+  position: relative;
+  max-width: 520px;
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+}
+
+.auth-form-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid #dce8de;
+  border-radius: 8px;
+  box-shadow: 0 20px 44px rgba(25, 52, 37, 0.08);
+}
+
+.auth-card .ant-card-head-title {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+@media (max-width: 1060px) {
+  .app-sidebar {
+    width: 218px;
+  }
+
+  .workspace-grid,
+  .auth-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-visual {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+  }
+
+  .app-sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #dce8de;
+  }
+
+  .side-nav.ant-menu {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .side-nav .ant-menu-item {
+    flex: 0 0 auto;
+  }
+
+  .app-header,
+  .eco-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .app-header {
+    height: auto;
+    min-height: 72px;
+    gap: 10px;
+    padding-block: 14px;
+  }
+
+  .app-content {
+    padding: 18px;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .eco-filter .ant-cascader,
+  .eco-filter .ant-select,
+  .eco-filter .ant-picker {
+    width: min(100%, 320px) !important;
+  }
+
+  .auth-visual {
+    padding: 36px 28px;
+  }
+
+  .auth-title {
+    font-size: 30px;
+  }
+}
+
+@media (max-width: 420px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-form-wrap {
+    padding: 22px;
+  }
+
+  .auth-visual {
+    min-height: 260px;
+  }
 }

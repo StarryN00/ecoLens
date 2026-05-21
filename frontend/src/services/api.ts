@@ -11,6 +11,13 @@ const api = axios.create({
   }
 });
 
+type DataApi = {
+  get<T = any>(url: string, config?: any): Promise<T>;
+  post<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  put<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  delete<T = any>(url: string, config?: any): Promise<T>;
+};
+
 // 请求拦截器：自动附加 Bearer token
 api.interceptors.request.use(
   (config) => {
@@ -41,6 +48,8 @@ api.interceptors.response.use(
   }
 );
 
+const request = api as unknown as DataApi;
+
 // 认证相关 API
 export const authApi = {
   // 登录使用 application/x-www-form-urlencoded（OAuth2PasswordRequestForm 要求）
@@ -48,25 +57,25 @@ export const authApi = {
     const body = new URLSearchParams();
     body.append('username', username);
     body.append('password', password);
-    return api.post('/api/v1/auth/login', body, {
+    return request.post('/api/v1/auth/login', body, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
   },
   register: (data: { username: string; password: string; email?: string }) =>
-    api.post('/api/v1/auth/register', data),
-  getMe: () => api.get('/api/v1/auth/me'),
+    request.post('/api/v1/auth/register', data),
+  getMe: () => request.get('/api/v1/auth/me'),
   changePassword: (data: { old_password: string; new_password: string }) =>
-    api.post('/api/v1/auth/change-password', data),
+    request.post('/api/v1/auth/change-password', data),
 };
 
 // 任务相关API
 export const taskApi = {
   // params 支持 { skip, limit, status, region_id } —— region_id 过滤在后端 WHERE
   getTasks: (params?: Record<string, unknown>) =>
-    api.get('/api/v1/tasks', { params }),
-  getTask: (id: string) => api.get(`/api/v1/tasks/${id}`),
-  createTask: (data: any) => api.post('/api/v1/tasks', data),
-  deleteTask: (id: string) => api.delete(`/api/v1/tasks/${id}`),
+    request.get('/api/v1/tasks', { params }),
+  getTask: (id: string) => request.get(`/api/v1/tasks/${id}`),
+  createTask: (data: any) => request.post('/api/v1/tasks', data),
+  deleteTask: (id: string) => request.delete(`/api/v1/tasks/${id}`),
   uploadImages: (taskId: string, formData: FormData) => {
     // 使用 fetch 代替 axios，避免默认 headers 干扰 multipart 上传
     // 手动附加 Authorization
@@ -90,12 +99,12 @@ export const taskApi = {
     });
   },
   // 新增API
-  getTaskResults: (id: string) => api.get(`/api/v1/tasks/${id}/results`),
-  getTaskNests: (id: string) => api.get(`/api/v1/tasks/${id}/nests`),
-  getTaskImages: (id: string) => api.get(`/api/v1/tasks/${id}/images`),
-  getTaskStatus: (id: string) => api.get(`/api/v1/tasks/${id}/status`),
-  getTaskStatistics: (id: string) => api.get(`/api/v1/tasks/${id}/statistics`),
-  getNestDetail: (id: string) => api.get(`/api/v1/nests/${id}`),
+  getTaskResults: (id: string) => request.get(`/api/v1/tasks/${id}/results`),
+  getTaskNests: (id: string) => request.get(`/api/v1/tasks/${id}/nests`),
+  getTaskImages: (id: string) => request.get(`/api/v1/tasks/${id}/images`),
+  getTaskStatus: (id: string) => request.get(`/api/v1/tasks/${id}/status`),
+  getTaskStatistics: (id: string) => request.get(`/api/v1/tasks/${id}/statistics`),
+  getNestDetail: (id: string) => request.get(`/api/v1/nests/${id}`),
 };
 
 /**
@@ -159,18 +168,18 @@ export const imageApi = {
 // 管理员用户管理 API (T8)
 export const adminApi = {
   listUsers: (skip = 0, limit = 50) =>
-    api.get('/api/v1/admin/users', { params: { skip, limit } }),
+    request.get('/api/v1/admin/users', { params: { skip, limit } }),
   createUser: (data: {
     username: string;
     password: string;
     email?: string;
     is_admin?: boolean;
-  }) => api.post('/api/v1/admin/users', data),
+  }) => request.post('/api/v1/admin/users', data),
   updateUser: (
     id: string,
     data: { is_active?: boolean; is_admin?: boolean; new_password?: string },
-  ) => api.put(`/api/v1/admin/users/${id}`, data),
-  deleteUser: (id: string) => api.delete(`/api/v1/admin/users/${id}`),
+  ) => request.put(`/api/v1/admin/users/${id}`, data),
+  deleteUser: (id: string) => request.delete(`/api/v1/admin/users/${id}`),
 };
 
 // 行政区域 API (T1 多级目录架构：市/区/街镇 三级树)
@@ -179,12 +188,12 @@ export const regionApi = {
   getTree: () => api.get('/api/v1/regions/tree'),
   // 分层查询
   list: (params?: { level?: string; parent_id?: string }) =>
-    api.get('/api/v1/regions/', { params }),
+    request.get('/api/v1/regions/', { params }),
   create: (data: { name: string; level: string; parent_id?: string }) =>
-    api.post('/api/v1/regions/', data),
+    request.post('/api/v1/regions/', data),
   update: (id: string, data: { name: string }) =>
-    api.put(`/api/v1/regions/${id}`, data),
-  remove: (id: string) => api.delete(`/api/v1/regions/${id}`),
+    request.put(`/api/v1/regions/${id}`, data),
+  remove: (id: string) => request.delete(`/api/v1/regions/${id}`),
 };
 
 export default api;

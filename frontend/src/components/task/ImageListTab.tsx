@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Table, Tag, Row, Col, Button, message } from 'antd';
+import { DownloadOutlined, FileImageOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { TaskImage, Task } from '../../types/task';
 import { getSeverityTag } from './taskUtils';
@@ -125,18 +126,27 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
 
   return (
     <Card
+      className="eco-panel"
       title="图片列表"
       loading={loading}
       extra={
-        <Button type="primary" onClick={exportImagesJson} disabled={images.length === 0}>
+        <Button
+          type="primary"
+          icon={<DownloadOutlined />}
+          onClick={exportImagesJson}
+          disabled={images.length === 0}
+        >
           导出JSON
         </Button>
       }
     >
-      <div style={{ marginBottom: 16, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
+      <div style={{ marginBottom: 16, padding: 16, background: '#f5f8f4', borderRadius: 8, border: '1px solid #dce8de' }}>
         <Row gutter={16} align="middle">
           <Col>
-            <span style={{ fontWeight: 'bold' }}>虫巢检测统计：</span>
+            <span style={{ fontWeight: 'bold' }}>
+              <FileImageOutlined style={{ color: '#1f7a4d', marginRight: 6 }} />
+              虫巢检测统计
+            </span>
           </Col>
           <Col>
             <Tag color="blue">总图片: {totalImages}</Tag>
@@ -176,7 +186,13 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
         </Row>
       </div>
 
-      <Table columns={imageColumns} dataSource={filteredImages} rowKey="id" pagination={{ pageSize: 10 }} />
+      <Table
+        columns={imageColumns}
+        dataSource={filteredImages}
+        rowKey="id"
+        pagination={{ pageSize: 10 }}
+        scroll={{ x: 820 }}
+      />
     </Card>
   );
 };

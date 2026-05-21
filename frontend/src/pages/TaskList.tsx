@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Tag, Space, Card, Cascader, message } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Tag, Space, Card, Cascader, message, Progress } from 'antd';
+import {
+  CompassOutlined,
+  EyeOutlined,
+  FileImageOutlined,
+  PlusOutlined,
+  RadarChartOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { regionApi, taskApi } from '../services/api';
 
@@ -90,6 +97,19 @@ const TaskList: React.FC = () => {
     return <Tag color={color}>{text}</Tag>;
   };
 
+  const completedTasks = tasks.filter((task) => task.status === 'completed').length;
+  const activeTasks = tasks.filter((task) =>
+    ['uploading', 'processing'].includes(task.status),
+  ).length;
+  const totalImages = tasks.reduce((sum, task) => sum + (task.total_images || 0), 0);
+  const processedImages = tasks.reduce(
+    (sum, task) => sum + (task.processed_images || 0),
+    0,
+  );
+  const processedPercent = totalImages
+    ? Math.round((processedImages / totalImages) * 100)
+    : 0;
+
   const columns = [
     { title: '任务名称', dataIndex: 'task_name', key: 'task_name' },
     {
@@ -137,36 +157,101 @@ const TaskList: React.FC = () => {
   ];
 
   return (
-    <Card
-      title="巡检任务列表"
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/tasks/create')}
-        >
-          新建任务
-        </Button>
-      }
-    >
-      <Space style={{ marginBottom: 16 }}>
-        <span>按区域筛选：</span>
-        <Cascader
-          options={regionOptions}
-          onChange={handleRegionFilter}
-          placeholder="选择 市/区/街镇 过滤（选到街镇生效）"
-          changeOnSelect
-          allowClear
-          style={{ width: 320 }}
-        />
-      </Space>
-      <Table
-        columns={columns}
-        dataSource={tasks}
-        loading={loading}
-        rowKey="id"
-      />
-    </Card>
+    <div className="eco-page">
+      <div className="eco-page-header">
+        <div>
+          <div className="eco-eyebrow">Inspection Command</div>
+          <h1 className="eco-page-title">巡检任务工作台</h1>
+          <div className="eco-page-desc">
+            汇总无人机影像巡检进度、行政区域筛选和虫巢识别任务状态，便于快速进入复核与处置。
+          </div>
+        </div>
+        <div className="eco-actions">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/tasks/create')}
+          >
+            新建任务
+          </Button>
+        </div>
+      </div>
+
+      <div className="metric-grid">
+        <div className="metric-card">
+          <div className="metric-label">任务总数</div>
+          <div className="metric-value">{tasks.length}</div>
+          <div className="metric-hint">已完成 {completedTasks} 个</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">处理中任务</div>
+          <div className="metric-value">{activeTasks}</div>
+          <div className="metric-hint">上传与推理中的任务</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">影像总量</div>
+          <div className="metric-value">{totalImages}</div>
+          <div className="metric-hint">已处理 {processedImages} 张</div>
+        </div>
+        <div className="metric-card risk">
+          <div className="metric-label">处理进度</div>
+          <div className="metric-value">{processedPercent}%</div>
+          <Progress percent={processedPercent} showInfo={false} strokeColor="#1f7a4d" />
+        </div>
+      </div>
+
+      <div className="workspace-grid">
+        <Card className="eco-panel" title="任务队列">
+          <div className="eco-toolbar">
+            <div className="eco-filter">
+              <CompassOutlined style={{ color: '#1f7a4d' }} />
+              <span>行政区划</span>
+              <Cascader
+                options={regionOptions}
+                onChange={handleRegionFilter}
+                placeholder="选择 市 / 区 / 街镇"
+                changeOnSelect
+                allowClear
+                style={{ width: 320 }}
+              />
+            </div>
+            <Space size={8} wrap>
+              <Tag icon={<RadarChartOutlined />} color="green">
+                已完成 {completedTasks}
+              </Tag>
+              <Tag icon={<FileImageOutlined />} color="blue">
+                影像 {totalImages}
+              </Tag>
+            </Space>
+          </div>
+          <Table
+            columns={columns}
+            dataSource={tasks}
+            loading={loading}
+            rowKey="id"
+            scroll={{ x: 980 }}
+            pagination={{ pageSize: 10 }}
+          />
+        </Card>
+
+        <Card className="eco-panel" title="区域态势">
+          <div className="map-preview" aria-label="区域态势示意图">
+            <span className="map-marker one" />
+            <span className="map-marker two" />
+            <span className="map-marker three" />
+          </div>
+          <Space direction="vertical" size={10} style={{ marginTop: 16, width: '100%' }}>
+            <Tag color="green">三级目录筛选：市 / 区 / 街镇</Tag>
+            <Tag color="orange" icon={<WarningOutlined />}>
+              重度风险在详情页复核
+            </Tag>
+            <div style={{ color: '#607065', fontSize: 13 }}>
+              进入任务详情后可查看虫巢分布地图、图片检测框和去重后的虫巢清单。
+            </div>
+          </Space>
+        </Card>
+      </div>
+    </div>
   );
 };
 

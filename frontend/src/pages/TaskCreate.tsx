@@ -11,7 +11,7 @@ import {
   Steps,
   Alert,
 } from 'antd';
-import { UploadOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { UploadOutlined, CheckCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { regionApi, taskApi } from '../services/api';
 
@@ -245,14 +245,30 @@ const TaskCreate: React.FC = () => {
   };
 
   return (
-    <Card title="新建巡检任务">
-      <Steps current={currentStep} style={{ marginBottom: 32 }}>
-        <Step title="基本信息" />
-        <Step title="上传图片" />
-        <Step title="完成" />
-      </Steps>
-      {renderStepContent()}
-    </Card>
+    <div className="eco-page">
+      <div className="eco-page-header">
+        <div>
+          <div className="eco-eyebrow">Create Inspection</div>
+          <h1 className="eco-page-title">新建巡检任务</h1>
+          <div className="eco-page-desc">
+            选择完整行政区划，补充巡检地块信息后上传无人机影像，系统将自动进入检测流程。
+          </div>
+        </div>
+        <div className="eco-actions">
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>
+            返回任务列表
+          </Button>
+        </div>
+      </div>
+      <Card className="eco-panel">
+        <Steps current={currentStep} style={{ marginBottom: 32 }}>
+          <Step title="基本信息" />
+          <Step title="上传图片" />
+          <Step title="完成" />
+        </Steps>
+        {renderStepContent()}
+      </Card>
+    </div>
   );
 };
 

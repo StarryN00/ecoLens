@@ -23,6 +23,7 @@ export function useTaskDetail(id: string): UseTaskDetailResult {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const taskStatus = task?.status;
 
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
@@ -59,7 +60,7 @@ export function useTaskDetail(id: string): UseTaskDetailResult {
 
   // Poll status while task is in a non-terminal state
   useEffect(() => {
-    if (!task || !ACTIVE_STATUSES.has(task.status)) return;
+    if (!taskStatus || !ACTIVE_STATUSES.has(taskStatus)) return;
 
     pollRef.current = setInterval(async () => {
       try {
@@ -75,7 +76,7 @@ export function useTaskDetail(id: string): UseTaskDetailResult {
     }, POLL_INTERVAL_MS);
 
     return stopPolling;
-  }, [id, task?.status, stopPolling, refetch]);
+  }, [id, taskStatus, stopPolling, refetch]);
 
   return { task, results, nests, images, loading, error, refetch };
 }

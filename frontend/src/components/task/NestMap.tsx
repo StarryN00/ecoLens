@@ -27,9 +27,9 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
         : [30.25, 120.15];
 
   return (
-    <Card title="虫巢分布地图" loading={loading}>
+    <Card className="eco-panel" title="虫巢分布地图" loading={loading}>
       {nests.length > 0 ? (
-        <div style={{ height: 500 }}>
+        <div style={{ height: 500, overflow: 'hidden', borderRadius: 8 }}>
           <MapContainer center={mapCenter} zoom={16} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

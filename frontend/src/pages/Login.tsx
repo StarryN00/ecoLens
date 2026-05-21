@@ -29,14 +29,15 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      background: '#f0f2f5'
-    }}>
-      <Card title="樟巢螟智能检测系统" style={{ width: 400 }}>
+    <div className="auth-page">
+      <section className="auth-visual">
+        <div className="auth-title">樟巢螟智能检测系统</div>
+        <div className="auth-copy">
+          面向林业巡检的无人机影像识别工作台，统一管理任务、区域、虫巢风险与检测报告。
+        </div>
+      </section>
+      <section className="auth-form-wrap">
+        <Card className="auth-card" title="登录工作台">
         <Form
           name="login"
           onFinish={onFinish}
@@ -79,7 +80,8 @@ const Login: React.FC = () => {
             还没有账号? <Link to="/register">立即注册</Link>
           </div>
         </Form>
-      </Card>
+        </Card>
+      </section>
     </div>
   );
 };

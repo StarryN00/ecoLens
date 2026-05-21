@@ -176,43 +176,51 @@ const RegionAdmin: React.FC = () => {
     });
 
   return (
-    <Card
-      title="行政区域管理（市 / 区 / 街镇 三级目录）"
-      loading={loading}
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => openCreate('city')}
+    <div className="eco-page">
+      <div className="eco-page-header">
+        <div>
+          <div className="eco-eyebrow">Region Directory</div>
+          <h1 className="eco-page-title">行政区域管理</h1>
+          <div className="eco-page-desc">
+            维护市 / 区 / 街镇三级目录，巡检任务必须归属到街镇级区域。
+          </div>
+        </div>
+        <div className="eco-actions">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => openCreate('city')}
+          >
+            新增市
+          </Button>
+        </div>
+      </div>
+      <Card className="eco-panel" title="区域树" loading={loading}>
+        {tree.length === 0 ? (
+          <Empty description="尚无区域，点右上角「新增市」开始建立三级目录" />
+        ) : (
+          <Tree
+            treeData={toTreeData(tree)}
+            defaultExpandAll
+            selectable={false}
+          />
+        )}
+        <Modal
+          title={modal.title}
+          open={modal.open}
+          onOk={handleOk}
+          onCancel={() => setModal((m) => ({ ...m, open: false }))}
+          destroyOnHidden
         >
-          新增市
-        </Button>
-      }
-    >
-      {tree.length === 0 ? (
-        <Empty description="尚无区域，点右上角「新增市」开始建立三级目录" />
-      ) : (
-        <Tree
-          treeData={toTreeData(tree)}
-          defaultExpandAll
-          selectable={false}
-        />
-      )}
-      <Modal
-        title={modal.title}
-        open={modal.open}
-        onOk={handleOk}
-        onCancel={() => setModal((m) => ({ ...m, open: false }))}
-        destroyOnClose
-      >
-        <Input
-          value={nameInput}
-          onChange={(e) => setNameInput(e.target.value)}
-          placeholder="区域名称"
-          onPressEnter={handleOk}
-        />
-      </Modal>
-    </Card>
+          <Input
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            placeholder="区域名称"
+            onPressEnter={handleOk}
+          />
+        </Modal>
+      </Card>
+    </div>
   );
 };
 

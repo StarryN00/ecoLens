@@ -67,7 +67,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       confirmLoading={submitting}
       okText="确认修改"
       cancelText="取消"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}

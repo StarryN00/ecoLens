@@ -17,8 +17,8 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
   const isActive = task.status === 'processing' || task.status === 'uploading';
 
   return (
-    <>
-      <Card title="任务详情" loading={loading}>
+    <div className="eco-page">
+      <Card className="eco-panel" title="任务档案" loading={loading}>
         <Descriptions bordered column={2}>
           <Descriptions.Item label="任务名称">{task.task_name}</Descriptions.Item>
           <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
@@ -45,7 +45,7 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
         </Descriptions>
       </Card>
 
-      <Card title="统计概览" style={{ marginTop: 16 }} loading={loading}>
+      <Card className="eco-panel" title="检测统计" loading={loading}>
         <Row gutter={16}>
           <Col span={6}>
             <Statistic title="图片总数" value={task.total_images || 0} />
@@ -124,7 +124,7 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
           nests,
         }} />
       </div>
-    </>
+    </div>
   );
 };
 

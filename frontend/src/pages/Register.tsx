@@ -42,14 +42,15 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      background: '#f0f2f5'
-    }}>
-      <Card title="注册账号" style={{ width: 400 }}>
+    <div className="auth-page">
+      <section className="auth-visual">
+        <div className="auth-title">建立巡检协作账号</div>
+        <div className="auth-copy">
+          注册后可进入任务工作台，上传巡检影像并跟踪虫巢检测结果。管理员权限由后台脚本或管理员统一分配。
+        </div>
+      </section>
+      <section className="auth-form-wrap">
+        <Card className="auth-card" title="注册账号">
         <Form name="register" onFinish={onFinish} autoComplete="off">
           <Form.Item
             name="username"
@@ -93,7 +94,8 @@ const Register: React.FC = () => {
             已有账号? <Link to="/login">去登录</Link>
           </div>
         </Form>
-      </Card>
+        </Card>
+      </section>
     </div>
   );
 };

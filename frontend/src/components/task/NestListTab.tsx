@@ -19,8 +19,14 @@ const nestColumns: ColumnsType<Nest> = [
 ];
 
 const NestListTab: React.FC<Props> = ({ nests, loading }) => (
-  <Card title="虫巢列表" loading={loading}>
-    <Table columns={nestColumns} dataSource={nests} rowKey="id" pagination={{ pageSize: 10 }} />
+  <Card className="eco-panel" title="虫巢列表" loading={loading}>
+    <Table
+      columns={nestColumns}
+      dataSource={nests}
+      rowKey="id"
+      pagination={{ pageSize: 10 }}
+      scroll={{ x: 720 }}
+    />
   </Card>
 );
 

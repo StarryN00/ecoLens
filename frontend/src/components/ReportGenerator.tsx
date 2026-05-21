@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Modal, Table, Tag, message } from 'antd';
+import React, { useState } from 'react';
+import { Button, Modal, message } from 'antd';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';

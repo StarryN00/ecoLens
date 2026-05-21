@@ -165,25 +165,58 @@ const UserAdmin: React.FC = () => {
   ];
 
   return (
-    <Card
-      title="用户管理"
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setCreateOpen(true)}
-        >
-          创建用户
-        </Button>
-      }
-    >
-      <Table
-        dataSource={users}
-        columns={columns}
-        rowKey="id"
-        loading={loading}
-        pagination={{ pageSize: 20 }}
-      />
+    <div className="eco-page">
+      <div className="eco-page-header">
+        <div>
+          <div className="eco-eyebrow">Access Control</div>
+          <h1 className="eco-page-title">用户管理</h1>
+          <div className="eco-page-desc">
+            管理系统账号、管理员权限和账号启用状态，保障巡检数据访问边界清晰。
+          </div>
+        </div>
+        <div className="eco-actions">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateOpen(true)}
+          >
+            创建用户
+          </Button>
+        </div>
+      </div>
+
+      <div className="metric-grid">
+        <div className="metric-card">
+          <div className="metric-label">账号总数</div>
+          <div className="metric-value">{users.length}</div>
+          <div className="metric-hint">系统内已创建账号</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">管理员</div>
+          <div className="metric-value">{users.filter((u) => u.is_admin).length}</div>
+          <div className="metric-hint">拥有后台管理权限</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">正常账号</div>
+          <div className="metric-value">{users.filter((u) => u.is_active).length}</div>
+          <div className="metric-hint">可登录使用</div>
+        </div>
+        <div className="metric-card risk">
+          <div className="metric-label">禁用账号</div>
+          <div className="metric-value">{users.filter((u) => !u.is_active).length}</div>
+          <div className="metric-hint">已暂停访问</div>
+        </div>
+      </div>
+
+      <Card className="eco-panel" title="账号列表">
+        <Table
+          dataSource={users}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 20 }}
+          scroll={{ x: 760 }}
+        />
 
       <Modal
         title="创建用户"
@@ -194,7 +227,7 @@ const UserAdmin: React.FC = () => {
           createForm.resetFields();
         }}
         confirmLoading={submitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={createForm} layout="vertical">
           <Form.Item
@@ -226,7 +259,7 @@ const UserAdmin: React.FC = () => {
         onOk={handleEdit}
         onCancel={() => setEditOpen(false)}
         confirmLoading={submitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={editForm} layout="vertical">
           <Form.Item name="is_active" label="账号状态" valuePropName="checked">
@@ -240,7 +273,8 @@ const UserAdmin: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+      </Card>
+    </div>
   );
 };
 
