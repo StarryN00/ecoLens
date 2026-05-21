@@ -38,7 +38,7 @@ Verdict flow per task:
 | T8 | done | 107c444 | 2026-05-20 | admin 用户管理：/api/v1/admin/users CRUD + UserAdmin.tsx + AdminRoute |
 | W3 | done | b3dc826 | 2026-05-21 | 重写 test_api/test_inference 适配鉴权 + CI 解除 ignore + 全项目 ruff 清理；Codex PASS，py3.11 下 133 passed |
 | W4 | manual | — | 2026-05-19 | 需 user 手动 SSH + rsync `.pt` 文件到生产 models/ + restart PM2 |
-| T3 | pending | — | — | 图片压缩，人工进行中 |
+| T3 | done | c2d7e36 | 2026-05-21 | 后端默认压缩 max_width=1920（quality 82）+ max_width=0 取原图；前端 AuthedImage "原图"按钮；Codex PASS |
 | T1 | pending | — | — | 多级目录架构，人工进行中 |
 
 ## T3 / T1 实现要点（来自 Codex 历次审核反馈）
