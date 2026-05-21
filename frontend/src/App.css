@@ -17,6 +17,8 @@ body {
 }
 
 .app-shell {
+  display: flex;
+  flex-direction: row;
   min-height: 100vh;
   background:
     linear-gradient(135deg, rgba(31, 122, 77, 0.08), transparent 32%),
@@ -26,6 +28,7 @@ body {
 .app-sidebar {
   position: sticky;
   top: 0;
+  flex-shrink: 0;
   width: 248px;
   height: 100vh;
   padding: 20px 14px;
