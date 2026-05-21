@@ -3,7 +3,8 @@ import { Button, Modal, message } from 'antd';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { DownloadOutlined, FilePdfOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { DownloadOutlined, FilePdfOutlined, FileExcelOutlined, FileWordOutlined } from '@ant-design/icons';
+import { downloadTaskReportDocx } from '../services/api';
 
 interface Nest {
   id: string;
@@ -16,6 +17,7 @@ interface Nest {
 }
 
 interface ReportData {
+  task_id: string;
   task_name: string;
   area_name: string;
   operator: string;
@@ -35,6 +37,7 @@ interface ReportGeneratorProps {
 
 const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
   const [modalVisible, setModalVisible] = useState(false);
+  const [wordLoading, setWordLoading] = useState(false);
 
   const exportPDF = () => {
     const doc = new jsPDF();
@@ -141,6 +144,19 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     message.success('CSV文件已导出');
   };
 
+  // T5：Word 报告由后端 python-docx 生成，前端 fetch 下载
+  const exportWord = async () => {
+    setWordLoading(true);
+    try {
+      await downloadTaskReportDocx(data.task_id, data.task_name);
+      message.success('Word报告已导出');
+    } catch {
+      message.error('Word报告导出失败');
+    } finally {
+      setWordLoading(false);
+    }
+  };
+
   return (
     <>
       <Button 
@@ -173,6 +189,15 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
             block
           >
             导出Excel报告
+          </Button>
+          <Button
+            icon={<FileWordOutlined />}
+            size="large"
+            onClick={exportWord}
+            loading={wordLoading}
+            block
+          >
+            导出Word报告
           </Button>
           <Button 
             size="large"

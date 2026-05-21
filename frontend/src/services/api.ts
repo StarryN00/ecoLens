@@ -139,6 +139,49 @@ export async function fetchAuthedImageUrl(path: string): Promise<string> {
   return URL.createObjectURL(blob);
 }
 
+/**
+ * 下载任务的 Word 巡检报告（T5）。
+ *
+ * 后端 /tasks/{id}/report.docx 需要 Bearer token，浏览器原生的
+ * <a download> 不会自动带 Authorization 头，所以用 fetch 显式带 token
+ * 取回 .docx blob，再用一个临时 <a> 触发下载。
+ */
+export async function downloadTaskReportDocx(
+  taskId: string,
+  taskName: string,
+): Promise<void> {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/tasks/${taskId}/report.docx`,
+    { headers },
+  );
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    const p = window.location.pathname;
+    if (p !== '/login' && p !== '/register') {
+      window.location.href = '/login';
+    }
+    throw new Error('未授权');
+  }
+  if (!res.ok) {
+    throw new Error(`报告导出失败: HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const date = new Date().toISOString().split('T')[0];
+  link.download = `巡检报告_${taskName}_${date}.docx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // 图片相关API
 export const imageApi = {
   /**

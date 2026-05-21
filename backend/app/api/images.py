@@ -221,10 +221,9 @@ async def get_image_annotated(
     import os
 
     from fastapi.responses import StreamingResponse
-    from PIL import Image as PILImage
-    from PIL import ImageDraw
 
     from app.models import RawNestDetection
+    from app.services.image_render import render_annotated_image
 
     if max_width < 0:
         raise HTTPException(status_code=400, detail="max_width 不能为负数")
@@ -238,43 +237,8 @@ async def get_image_annotated(
     )
     detections = result.scalars().all()
 
-    # 打开原图（convert RGB 防 RGBA/P 模式存 JPEG 失败）
-    image = PILImage.open(img.storage_path).convert("RGB")
-    draw = ImageDraw.Draw(image)
-    width, height = image.size
-
-    # 绘制检测框
-    for det in detections:
-        # 计算像素坐标（归一化坐标转像素坐标）
-        cx = det.bbox_x_center * width
-        cy = det.bbox_y_center * height
-        bw = det.bbox_width * width
-        bh = det.bbox_height * height
-
-        x1 = cx - bw / 2
-        y1 = cy - bh / 2
-        x2 = cx + bw / 2
-        y2 = cy + bh / 2
-
-        color = "red"
-
-        # 绘制矩形框
-        draw.rectangle([x1, y1, x2, y2], outline=color, width=5)
-
-        # 绘制置信度文字
-        conf_text = f"{det.confidence:.2%}"
-        draw.text((x1, y1 - 20), conf_text, fill=color)
-
-    # 画框完成后按 max_width 统一缩放压缩
-    if max_width > 0 and image.width > max_width:
-        ratio = max_width / image.width
-        image = image.resize(
-            (max_width, max(1, int(image.height * ratio))), PILImage.LANCZOS
-        )
-
-    # 保存到内存（quality 82，与 get_image_file 一致）
-    img_io = io.BytesIO()
-    image.save(img_io, format="JPEG", quality=82, optimize=True)
-    img_io.seek(0)
-
-    return StreamingResponse(img_io, media_type="image/jpeg")
+    # 渲染逻辑统一在 image_render.render_annotated_image（T5 报告共用）
+    jpeg_bytes = render_annotated_image(
+        img.storage_path, detections, max_width=max_width
+    )
+    return StreamingResponse(io.BytesIO(jpeg_bytes), media_type="image/jpeg")

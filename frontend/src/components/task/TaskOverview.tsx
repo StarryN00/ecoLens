@@ -111,6 +111,7 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
 
       <div style={{ marginTop: 16, textAlign: 'right' }}>
         <ReportGenerator data={{
+          task_id: task.id,
           task_name: task.task_name,
           area_name: task.area_name,
           operator: task.operator,
