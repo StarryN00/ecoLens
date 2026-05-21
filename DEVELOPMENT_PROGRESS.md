@@ -1,47 +1,56 @@
 # Development Progress (T-Series + W-Series)
 
-Track development of tasks listed in `DEVELOPMENT_TASKS.md` across automated runs.
+Track development of tasks listed in `DEVELOPMENT_TASKS.md`.
 
-This is the **single source of truth** for the LaunchAgent
-`com.starryn.ecolens-autodev` (fires hourly). Each fire reads this table to
-pick the next undone task; **do not edit by hand without coordinating with
-the agent** or it may re-do a finished task.
+> 历史：T4/W1/W2/T2/T8 由 LaunchAgent `com.starryn.ecolens-autodev` 自动完成
+> （已下线）；T3/T1/W3 因自动流程反复 BLOCKED，改为对话内人工实现 + Codex 审核。
 
 Verdict flow per task:
-- `in_review` — Claude implemented, awaiting Codex audit
-- `done` — Codex PASSed and pushed to main
-- `BLOCKED` — Codex FAILed twice, needs human attention
+- `pending` — 待开发
+- `in_review` — 已实现，待 Codex 审核
+- `done` — Codex PASS 并已 push 到 main
+- `manual` — 需人工操作（agent 物理做不到），跳过
+- `BLOCKED` — 审核多次 FAIL，需人工介入
 
 ## Task Order (priority queue)
 
-1. **T4** — 虫巢标注框红色加粗（30 分钟，最快胜利）
-2. **W4** — 模型文件上传到生产（手工任务，Claude 会标记"manual: user must rsync"）
-3. **W1** — bcrypt==4.0.1 锁版本
-4. **W2** — starlette / prometheus 冲突
-5. **T3** — 图片压缩
-6. **T2** — 地块管理（面积 + 林业局小班号）
-7. **T1** — 多级目录架构（市→区→街镇）
-8. **W3** — 重写 test_api.py / test_inference.py
-9. **T8** — 用户管理 UI (admin)
-10. **T7** — 操作手册（截图）+ API 文档
-11. **T5** — Word (.docx) 报告格式（如客户需要）
-12. **T6** — GeoJSON / KML / Shapefile 导出（如客户需要）
+1. ~~T4 虫巢标注框红色加粗~~ ✅
+2. W4 模型文件上传到生产（manual）
+3. ~~W1 bcrypt==4.0.1 锁版本~~ ✅
+4. ~~W2 starlette / prometheus 冲突~~ ✅
+5. **T3 — 图片压缩**（人工进行中）
+6. ~~T2 地块管理~~ ✅
+7. **T1 — 多级目录架构（市→区→街镇）**（人工进行中）
+8. ~~W3 重写 test_api.py / test_inference.py~~ ✅
+9. ~~T8 用户管理 UI (admin)~~ ✅
+10. T7 — 操作手册（截图）+ API 文档（待客户确认）
+11. T5 — Word (.docx) 报告格式（待客户确认）
+12. T6 — GeoJSON / KML / Shapefile 导出（待客户确认）
 
 ## Progress Table
 
 | Task | Status | Commit | Date | Notes |
 |------|--------|--------|------|-------|
 | T4 | done | 415bc89 | 2026-05-19 | 后端+前端统一红色宽5边框，Codex PASS |
-| W4 | manual | — | 2026-05-19 | agent skip：需要 user 手动 SSH + rsync .pt 文件到生产 + restart PM2 |
-| W1 | in_review | 0519d19 | 2026-05-19 | requirements.txt 加 bcrypt==4.0.1，passlib 1.7.4 不兼容 bcrypt 5.x |
-| W2 | in_review | eb23ed9 | 2026-05-20 | prometheus-fastapi-instrumentator 锁 6.1.0，7.x 与 fastapi 0.104.1 的 starlette==0.27 冲突 |
+| W1 | done | 0519d19 | 2026-05-19 | requirements.txt 锁 bcrypt==4.0.1（passlib 1.7.4 不兼容 bcrypt 5.x）|
+| W2 | done | eb23ed9 | 2026-05-20 | prometheus-fastapi-instrumentator 锁 6.1.0 + starlette==0.27 |
+| T2 | done | 23d248f | 2026-05-20 | 地块面积(plot_area_mu) + 林业局小班号(forestry_sub_compartment) 全栈 |
+| T8 | done | 107c444 | 2026-05-20 | admin 用户管理：/api/v1/admin/users CRUD + UserAdmin.tsx + AdminRoute |
+| W3 | done | b3dc826 | 2026-05-21 | 重写 test_api/test_inference 适配鉴权 + CI 解除 ignore + 全项目 ruff 清理；Codex PASS，py3.11 下 133 passed |
+| W4 | manual | — | 2026-05-19 | 需 user 手动 SSH + rsync `.pt` 文件到生产 models/ + restart PM2 |
+| T3 | pending | — | — | 图片压缩，人工进行中 |
+| T1 | pending | — | — | 多级目录架构，人工进行中 |
 
-> Note: W1 prior BLOCKED entry removed manually by user — wrapper bug rolled back W1 implementation. W1 will be retried at next fire.
-| T2 | in_review | 23d248f | 2026-05-20 | 地块面积(plot_area_mu)和林业局小班号(forestry_sub_compartment)全栈实现：model/service/API/migration/frontend |
-| T8 | in_review | 107c444 | 2026-05-20 | admin user management: GET/POST/PUT/DELETE /api/v1/admin/users + UserAdmin.tsx page + AdminRoute guard |
-| T3 | retry | — | 2026-05-20 | **RETRY — prior attempt failed Codex review.** Specific issues to fix: (1) The "view original" button was added to an unused/orphan component, not to the ACTUAL annotated UI users see. The real annotated viewer lives in `frontend/src/components/AuthedImage.tsx` and is used by the image list / annotated thumbnail flow — wire the button there. (2) Backend `/images/{id}?max_width=1920` was added as OPTIONAL — must be DEFAULT behavior: every request to `/images/{id}` and `/images/{id}/annotated` should return 1920-max compressed by default, and only `?max_width=0` returns full. Search for ALL image-rendering usages in frontend to verify the compressed path is taken. |
-| T1 | retry | — | 2026-05-20 | **RETRY — prior attempt failed Codex review.** Specific issues: (1) Task creation form does not ENFORCE picking a complete town-level region — backend must reject task POST if `region_id` is missing OR points to a non-town region (level != 'town'). Use pydantic validator. (2) Frontend Cascader must be `required` and validate that 3 levels are picked. (3) Region path display (full "市/区/街镇" string) must update everywhere a task is shown (TaskList table, TaskDetail header, ReportGenerator). |
-| W3 | retry | — | 2026-05-20 | **RETRY — prior attempt failed Codex review.** Specific issue: rewriting `tests/test_api.py` and `tests/test_inference.py` is only half the job — you MUST also remove `--ignore=tests/test_api.py --ignore=tests/test_inference.py` from `.github/workflows/ci.yml` so they actually run in CI. The autodev script also has those ignores in `DEV_PROMPT` test command — that's fine to keep for autodev itself, but CI must run them. Verify by running pytest tests/ (no ignores) locally before commit. |
-| T3 | BLOCKED | — | 2026-05-20 | images/{id}` still returns uncompressed original files by default for images at or below 1920px wide |
-| T1 | BLOCKED | — | 2026-05-20 | T1 is incomplete: TaskList region filtering and required region CRUD/constraint tests are missing, and hierarchy/path update logic is flawed. |
-| W3 | BLOCKED | — | 2026-05-20 | test_inference.py still contains no-op placeholder tests, so W3 is not genuinely complete. |
+## T3 / T1 实现要点（来自 Codex 历次审核反馈）
+
+**T3 图片压缩**：
+1. "view original" 按钮要接到**真正在用**的标注查看器（`frontend/src/components/AuthedImage.tsx`），不是孤儿组件。
+2. 后端 `/images/{id}` 和 `/images/{id}/annotated` 必须**默认**返回 1920-max 压缩版（quality≈82），只有 `?max_width=0` 才返回原图。`max_width` 要拒绝负值（防 500）。
+3. 前端所有图片渲染处都要走压缩路径。
+
+**T1 多级目录架构**：
+1. 后端：任务创建必须强制 `region_id` 存在且指向 town 级区域（level=='town'），用 pydantic validator 拒绝缺失/非 town。
+2. 前端：Cascader `required`，校验三级都选。
+3. 区域完整路径"市/区/街镇"在 TaskList / TaskDetail / ReportGenerator 都要正确显示。
+4. TaskList 区域筛选要在**后端**做（不能只在前端已加载的前 20 条上筛）。
+5. 需要 region CRUD + 层级约束的测试。
