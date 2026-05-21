@@ -239,7 +239,6 @@ def chapter_05_create_task(doc):
         "进入「上传图片」步骤,选择本次巡检的无人机航拍影像批量上传。"
         "上传完成后,系统会自动对影像进行 AI 检测,无需手动触发。",
     )
-    screenshot(doc, "05_upload.png", "图 5-2　上传无人机影像")
 
     S.add_heading(doc, "5.3　完成", level=2)
     S.add_body(
