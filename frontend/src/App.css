@@ -322,6 +322,36 @@ body {
   left: 52%;
 }
 
+.amap-summary {
+  margin-bottom: 12px;
+}
+
+.amap-container {
+  height: 500px;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #dce8de;
+  border-radius: 8px;
+}
+
+.amap-nest-marker {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--marker-color, #1f7a4d);
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--marker-color, #1f7a4d) 18%, transparent),
+    0 6px 18px rgba(22, 37, 29, 0.24);
+}
+
+.amap-info-window {
+  min-width: 180px;
+  color: #16251d;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
 .thumbnail-strip {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
