@@ -35,6 +35,16 @@ interface CascaderOption {
   children?: CascaderOption[];
 }
 
+interface RegionSituation {
+  name: string;
+  taskCount: number;
+  activeCount: number;
+  failedCount: number;
+  totalImages: number;
+  processedImages: number;
+  isUnassigned: boolean;
+}
+
 const toCascaderOptions = (nodes: RegionNode[]): CascaderOption[] =>
   nodes.map((n) => ({
     value: n.id,
@@ -44,6 +54,53 @@ const toCascaderOptions = (nodes: RegionNode[]): CascaderOption[] =>
         ? toCascaderOptions(n.children)
         : undefined,
   }));
+
+const getRegionSituationName = (task: Task) => {
+  if (!task.region_path) return '未分配';
+  const parts = task.region_path.split('/').filter(Boolean);
+  return parts[1] || parts[0] || task.area_name || '未分配';
+};
+
+const buildRegionSituations = (tasks: Task[]): RegionSituation[] => {
+  const byRegion = new Map<string, RegionSituation>();
+
+  tasks.forEach((task) => {
+    const name = getRegionSituationName(task);
+    const isUnassigned = !task.region_path;
+    const current =
+      byRegion.get(name) ||
+      ({
+        name,
+        taskCount: 0,
+        activeCount: 0,
+        failedCount: 0,
+        totalImages: 0,
+        processedImages: 0,
+        isUnassigned,
+      } satisfies RegionSituation);
+
+    current.taskCount += 1;
+    current.activeCount += ['uploading', 'processing'].includes(task.status)
+      ? 1
+      : 0;
+    current.failedCount += task.status === 'failed' ? 1 : 0;
+    current.totalImages += task.total_images || 0;
+    current.processedImages += task.processed_images || 0;
+    current.isUnassigned = current.isUnassigned || isUnassigned;
+    byRegion.set(name, current);
+  });
+
+  return Array.from(byRegion.values()).sort((a, b) => {
+    const aFollowUp = a.activeCount + a.failedCount;
+    const bFollowUp = b.activeCount + b.failedCount;
+    return (
+      bFollowUp - aFollowUp ||
+      b.totalImages - a.totalImages ||
+      b.taskCount - a.taskCount ||
+      a.name.localeCompare(b.name, 'zh-CN')
+    );
+  });
+};
 
 const TaskList: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -109,6 +166,15 @@ const TaskList: React.FC = () => {
   const processedPercent = totalImages
     ? Math.round((processedImages / totalImages) * 100)
     : 0;
+  const regionSituations = buildRegionSituations(tasks);
+  const coveredRegionCount = regionSituations.filter(
+    (item) => !item.isUnassigned,
+  ).length;
+  const unassignedTasks = tasks.filter((task) => !task.region_path).length;
+  const followUpTasks = tasks.filter((task) =>
+    ['uploading', 'processing', 'failed'].includes(task.status),
+  ).length;
+  const topRegionSituations = regionSituations.slice(0, 5);
 
   const columns = [
     { title: '任务名称', dataIndex: 'task_name', key: 'task_name' },
@@ -235,18 +301,83 @@ const TaskList: React.FC = () => {
         </Card>
 
         <Card className="eco-panel" title="区域态势">
-          <div className="map-preview" aria-label="区域态势示意图">
-            <span className="map-marker one" />
-            <span className="map-marker two" />
-            <span className="map-marker three" />
+          <div className="region-situation">
+            <div className="situation-summary">
+              <div className="situation-stat">
+                <span>覆盖区域</span>
+                <strong>{coveredRegionCount}</strong>
+              </div>
+              <div className="situation-stat">
+                <span>待跟进</span>
+                <strong>{followUpTasks}</strong>
+              </div>
+              <div className="situation-stat warning">
+                <span>未分配</span>
+                <strong>{unassignedTasks}</strong>
+              </div>
+            </div>
+
+            <div className="situation-section-title">区域待跟进排行</div>
+            <div className="region-rank-list">
+              {topRegionSituations.length === 0 ? (
+                <div className="region-rank-empty">暂无巡检任务数据</div>
+              ) : (
+                topRegionSituations.map((item, index) => {
+                  const completion = item.totalImages
+                    ? Math.round((item.processedImages / item.totalImages) * 100)
+                    : 0;
+                  const followUpCount = item.activeCount + item.failedCount;
+
+                  return (
+                    <div className="region-rank-item" key={item.name}>
+                      <div className="rank-index">{index + 1}</div>
+                      <div className="rank-main">
+                        <div className="rank-heading">
+                          <span>{item.name}</span>
+                          <Tag
+                            color={
+                              item.isUnassigned
+                                ? 'default'
+                                : followUpCount > 0
+                                  ? 'orange'
+                                  : 'green'
+                            }
+                          >
+                            {item.isUnassigned
+                              ? '待归档'
+                              : followUpCount > 0
+                                ? '需跟进'
+                                : '稳定'}
+                          </Tag>
+                        </div>
+                        <div className="rank-meta">
+                          <span>{item.taskCount} 个任务</span>
+                          <span>影像 {item.totalImages}</span>
+                          <span>待跟进 {followUpCount}</span>
+                        </div>
+                        <Progress
+                          percent={completion}
+                          showInfo={false}
+                          size="small"
+                          strokeColor={followUpCount > 0 ? '#d97706' : '#1f7a4d'}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
           <Space direction="vertical" size={10} style={{ marginTop: 16, width: '100%' }}>
             <Tag color="green">三级目录筛选：市 / 区 / 街镇</Tag>
-            <Tag color="orange" icon={<WarningOutlined />}>
-              重度风险在详情页复核
+            <Tag color={followUpTasks > 0 ? 'orange' : 'green'} icon={<WarningOutlined />}>
+              {followUpTasks > 0
+                ? `待跟进 ${followUpTasks} 个任务`
+                : '当前任务均已完成或无待处理项'}
             </Tag>
+            {unassignedTasks > 0 && <Tag>未分配 {unassignedTasks}</Tag>}
             <div style={{ color: '#607065', fontSize: 13 }}>
-              进入任务详情后可查看虫巢分布地图、图片检测框和去重后的虫巢清单。
+              这里按任务状态、行政区划和影像处理进度汇总；虫巢点位和检测框在任务详情页复核。
             </div>
           </Space>
         </Card>
