@@ -151,6 +151,7 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
   const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   const points = useMemo(() => buildPoints(nests, images), [nests, images]);
   const center = useMemo<[number, number]>(() => {
@@ -163,6 +164,7 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
     if (!AMAP_KEY || !containerRef.current) return undefined;
 
     let disposed = false;
+    setMapReady(false);
 
     if (AMAP_SECURITY_JS_CODE) {
       window._AMapSecurityConfig = {
@@ -188,6 +190,7 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
         mapRef.current.addControl(new AMap.ToolBar({ position: 'RB' }));
         infoWindowRef.current = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -28) });
         setMapError(null);
+        setMapReady(true);
       })
       .catch((error) => {
         setMapError(error instanceof Error ? error.message : '高德地图加载失败');
@@ -201,13 +204,14 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
         mapRef.current.destroy();
         mapRef.current = null;
       }
+      setMapReady(false);
     };
   }, [center, points.length]);
 
   useEffect(() => {
     const map = mapRef.current;
     const AMap = window.AMap;
-    if (!map || !AMap) return;
+    if (!mapReady || !map || !AMap) return;
 
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current = [];
@@ -252,7 +256,7 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
       map.setCenter(center);
       map.setZoom(points.length > 0 ? 16 : 11);
     }
-  }, [center, points]);
+  }, [center, mapReady, points]);
 
   return (
     <Card className="eco-panel" title="虫巢分布地图" loading={loading}>
