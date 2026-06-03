@@ -14,6 +14,7 @@ import {
   Layout,
   Menu,
   Space,
+  Spin,
   Typography,
   message,
 } from 'antd';
@@ -223,7 +224,14 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [token]);
 
   if (!token) return <Navigate to="/login" replace />;
-  if (isAdmin === null) return null;
+  if (isAdmin === null) {
+    return (
+      <div className="route-loading">
+        <Spin size="large" />
+        <span>正在验证管理员权限</span>
+      </div>
+    );
+  }
   if (!isAdmin) return <Navigate to="/tasks" replace />;
   return <>{children}</>;
 };
