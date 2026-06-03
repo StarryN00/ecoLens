@@ -201,7 +201,6 @@ const RegionAdmin: React.FC = () => {
         ) : (
           <Tree
             treeData={toTreeData(tree)}
-            defaultExpandAll
             selectable={false}
           />
         )}
