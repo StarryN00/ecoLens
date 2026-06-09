@@ -217,7 +217,11 @@ class UploadService:
     async def list_images(self, task_id, skip: int = 0, limit: int = 50) -> List[Image]:
         """查询图片列表"""
         result = await self.db.execute(
-            select(Image).where(Image.task_id == str(task_id)).offset(skip).limit(limit)
+            select(Image)
+            .where(Image.task_id == str(task_id))
+            .order_by(Image.created_at.asc(), Image.id.asc())
+            .offset(skip)
+            .limit(limit)
         )
         return result.scalars().all()
 

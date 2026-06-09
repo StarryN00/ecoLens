@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { TaskImage, Task } from '../../types/task';
 import { getSeverityTag } from './taskUtils';
 import AuthedImage from '../AuthedImage';
+import { taskApi } from '../../services/api';
 
 interface Props {
   images: TaskImage[];
@@ -14,24 +15,30 @@ interface Props {
 
 const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
   const [imageFilter, setImageFilter] = useState<'all' | 'with_nest' | 'without_nest'>('all');
+  const [exportingCsv, setExportingCsv] = useState(false);
 
-  const exportImagesJson = () => {
-    const exportData = images.map((img) => ({
-      filename: img.filename,
-      gps: img.has_gps ? { latitude: img.latitude, longitude: img.longitude } : null,
-      altitude: img.altitude,
-      has_nest: img.detection?.has_nest || false,
-    }));
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `task_${task.id}_images.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    message.success('导出成功');
+  const exportImagesCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const allImages = await fetchAllTaskImages(task.id, task.total_images, images);
+      const csv = buildImagesCsv(allImages);
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().split('T')[0];
+      link.href = url;
+      link.download = `任务图片数据_${sanitizeDownloadName(task.task_name)}_${date}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      message.success(`已导出 ${allImages.length} 条图片数据`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'CSV导出失败';
+      message.error(errorMessage);
+    } finally {
+      setExportingCsv(false);
+    }
   };
 
   const imageColumns: ColumnsType<TaskImage> = [
@@ -133,10 +140,11 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
         <Button
           type="primary"
           icon={<DownloadOutlined />}
-          onClick={exportImagesJson}
-          disabled={images.length === 0}
+          onClick={exportImagesCsv}
+          loading={exportingCsv}
+          disabled={loading || (images.length === 0 && task.total_images === 0)}
         >
-          导出JSON
+          导出CSV
         </Button>
       }
     >
@@ -196,5 +204,90 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
     </Card>
   );
 };
+
+const CSV_PAGE_SIZE = 500;
+
+async function fetchAllTaskImages(
+  taskId: string,
+  totalImages: number,
+  fallbackImages: TaskImage[],
+): Promise<TaskImage[]> {
+  const allImages: TaskImage[] = [];
+  let skip = 0;
+
+  while (totalImages === 0 || allImages.length < totalImages) {
+    const page = await taskApi.getTaskImages(taskId, {
+      skip,
+      limit: CSV_PAGE_SIZE,
+    }) as { items?: TaskImage[] };
+    const items = page.items || [];
+    allImages.push(...items);
+    if (items.length < CSV_PAGE_SIZE) break;
+    skip += CSV_PAGE_SIZE;
+  }
+
+  return allImages.length > 0 ? allImages : fallbackImages;
+}
+
+function buildImagesCsv(images: TaskImage[]): string {
+  const rows = images.map((img, index) => [
+    index + 1,
+    img.filename,
+    formatDate(img.capture_time),
+    formatDate(img.created_at),
+    img.has_gps ? formatNumber(img.latitude, 6) : '',
+    img.has_gps ? formatNumber(img.longitude, 6) : '',
+    formatNumber(img.altitude, 1),
+    img.has_gps ? '是' : '否',
+    img.detection ? (img.detection.has_nest ? '是' : '否') : '未检测',
+    img.detection?.nest_count ?? '',
+    formatSeverity(img.detection?.max_severity),
+  ]);
+
+  return [
+    ['序号', '照片名称', '拍摄日期', '入库日期', '纬度', '经度', '海拔高度(m)', '是否有GPS', '是否有虫害', '虫害数量', '最高严重程度'],
+    ...rows,
+  ].map((row) => row.map(formatCsvCell).join(',')).join('\n');
+}
+
+function formatCsvCell(value: unknown): string {
+  let text = value == null ? '' : String(value);
+  if (/^[=+\-@]/.test(text)) {
+    text = `'${text}`;
+  }
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('zh-CN', { hour12: false });
+}
+
+function formatNumber(value?: number | null, digits = 6): string {
+  return typeof value === 'number' ? value.toFixed(digits) : '';
+}
+
+function formatSeverity(value?: string | null): string {
+  if (!value) return '';
+  const severityMap: Record<string, string> = {
+    severe: '重度',
+    medium: '中度',
+    light: '轻度',
+  };
+  return severityMap[value] || value;
+}
+
+function sanitizeDownloadName(name: string): string {
+  return name
+    .replace(/[\\/:*?"<>|\r\n\t]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || '未命名任务';
+}
 
 export default ImageListTab;

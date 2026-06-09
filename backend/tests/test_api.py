@@ -174,16 +174,30 @@ class TestImageAPI:
         task = _create_task(
             client, auth_headers, town_region_id, task_name="图片列表测试"
         )
-        client.post(
+        upload = client.post(
             f"/api/v1/tasks/{task['id']}/images",
-            files={"files": ("a.jpg", _make_jpeg(color="blue"), "image/jpeg")},
+            files=[
+                ("files", ("a.jpg", _make_jpeg(color="blue"), "image/jpeg")),
+                ("files", ("b.jpg", _make_jpeg(color="green"), "image/jpeg")),
+            ],
             headers=auth_headers,
         )
+        assert upload.status_code == 200, upload.text
         resp = client.get(
             f"/api/v1/tasks/{task['id']}/images", headers=auth_headers
         )
         assert resp.status_code == 200
-        assert "items" in resp.json()
+        body = resp.json()
+        assert "items" in body
+        item = body["items"][0]
+        assert item["filename"] == "a.jpg"
+        assert "latitude" in item
+        assert "longitude" in item
+        assert "altitude" in item
+        assert "capture_time" in item
+        assert "created_at" in item
+        assert "detection" in item
+        assert [i["filename"] for i in body["items"][:2]] == ["a.jpg", "b.jpg"]
 
     def test_get_image_info(self, client, auth_headers, town_region_id):
         """/images/{id}/info 返回 JSON 元数据（/images/{id} 返回的是文件）。"""

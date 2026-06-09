@@ -105,7 +105,8 @@ export const taskApi = {
   // 新增API
   getTaskResults: (id: string) => request.get(`/api/v1/tasks/${id}/results`),
   getTaskNests: (id: string) => request.get(`/api/v1/tasks/${id}/nests`),
-  getTaskImages: (id: string) => request.get(`/api/v1/tasks/${id}/images`),
+  getTaskImages: (id: string, params?: Record<string, unknown>) =>
+    request.get(`/api/v1/tasks/${id}/images`, { params }),
   getTaskStatus: (id: string) => request.get(`/api/v1/tasks/${id}/status`),
   getTaskStatistics: (id: string) => request.get(`/api/v1/tasks/${id}/statistics`),
   getNestDetail: (id: string) => request.get(`/api/v1/nests/${id}`),

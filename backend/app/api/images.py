@@ -103,6 +103,7 @@ async def list_task_images(
                 "longitude": img.longitude,
                 "altitude": img.altitude,
                 "capture_time": img.capture_time,
+                "created_at": img.created_at,
                 "detection": detection_map.get(str(img.id)),
             }
             for img in images

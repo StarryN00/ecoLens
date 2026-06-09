@@ -49,8 +49,11 @@ export interface TaskImage {
   latitude?: number;
   longitude?: number;
   altitude?: number;
+  capture_time?: string | null;
+  created_at?: string | null;
   detection?: {
     has_nest: boolean;
+    nest_count?: number;
     max_severity: string | null;
   } | null;
 }
