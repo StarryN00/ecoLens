@@ -192,6 +192,7 @@ class UploadService:
             task = await TaskService(self.db).get_task(task_id)
             if task is not None:
                 task.total_images = (task.total_images or 0) + len(results)
+                task.status = "processing"
 
         await self.db.commit()
         return results

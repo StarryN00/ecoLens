@@ -18,7 +18,7 @@ import UploadMoreTab from '../components/task/UploadMoreTab';
 const TaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { task, results, nests, images, loading, error } = useTaskDetail(id!);
+  const { task, results, nests, images, loading, error, refetch } = useTaskDetail(id!);
 
   useEffect(() => {
     if (error) message.error(error.message);
@@ -37,7 +37,7 @@ const TaskDetail: React.FC = () => {
     { key: 'map', label: '地图', children: <NestMap nests={nests} images={images} loading={loading} /> },
     { key: 'nests', label: '虫巢列表', children: <NestListTab nests={nests} loading={loading} /> },
     { key: 'images', label: '图片', children: <ImageListTab images={images} task={task} loading={loading} /> },
-    { key: 'upload', label: '追加上传', children: <UploadMoreTab /> },
+    { key: 'upload', label: '追加上传', children: <UploadMoreTab task={task} onUploaded={refetch} /> },
   ];
 
   return (

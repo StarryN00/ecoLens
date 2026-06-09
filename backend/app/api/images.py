@@ -28,6 +28,14 @@ async def upload_images(
     ownership：通过 get_owned_task 校验，无权访问的非 owner 看到 404
     "任务不存在"，与不存在共用同一响应（防资源枚举）。
     """
+    if task.status == "processing" or (
+        task.status == "uploading" and (task.total_images or 0) > 0
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="任务正在处理图片，请等待当前处理完成后再追加上传",
+        )
+
     service = UploadService(db)
     results = await service.upload_images(str(task.id), files)
 

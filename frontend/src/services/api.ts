@@ -88,13 +88,17 @@ export const taskApi = {
       method: 'POST',
       body: formData,
       headers,
-    }).then(res => {
+    }).then(async res => {
       if (res.status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login';
         throw new Error('未授权');
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        const detail = payload?.detail;
+        throw new Error(typeof detail === 'string' ? detail : `HTTP ${res.status}`);
+      }
       return res.json();
     });
   },

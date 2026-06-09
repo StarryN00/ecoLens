@@ -328,7 +328,8 @@ def trigger_processing_sync(
 ) -> Dict[str, Any]:
     """触发整批图片的推理。
 
-    1. 把任务状态置为 processing、processed_images 清零
+    1. 把任务状态置为 processing。全量重跑时清零 processed_images；
+       追加上传传入显式 image_ids 时保留已有 processed_images。
     2. 用 Celery chord 显式编排：所有 process_image_task 完成后
        自动调度 process_task_deduplication，避免之前"每张图都查 task
        + 5 分钟兜底"的双路径竞态（见 #7）。
@@ -354,7 +355,8 @@ def trigger_processing_sync(
             ).scalar_one_or_none()
             if task is not None:
                 task.status = "processing"
-                task.processed_images = 0
+                if image_ids is None:
+                    task.processed_images = 0
             db.commit()
         except Exception:
             db.rollback()

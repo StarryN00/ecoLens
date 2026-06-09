@@ -12,7 +12,7 @@ interface UseTaskDetailResult {
   images: TaskImage[];
   loading: boolean;
   error: Error | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
 }
 
 export function useTaskDetail(id: string): UseTaskDetailResult {
