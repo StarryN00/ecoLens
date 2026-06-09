@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Tabs, Button, message, Progress, Tag } from 'antd';
 import {
   ArrowLeftOutlined,
+  DownloadOutlined,
   EnvironmentOutlined,
   FileImageOutlined,
   PlusOutlined,
@@ -14,11 +15,13 @@ import NestMap from '../components/task/NestMap';
 import NestListTab from '../components/task/NestListTab';
 import ImageListTab from '../components/task/ImageListTab';
 import UploadMoreTab from '../components/task/UploadMoreTab';
+import { downloadTaskReportDocx } from '../services/api';
 
 const TaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { task, results, nests, images, loading, error, refetch } = useTaskDetail(id!);
+  const [exportingReport, setExportingReport] = useState(false);
 
   useEffect(() => {
     if (error) message.error(error.message);
@@ -31,6 +34,19 @@ const TaskDetail: React.FC = () => {
   const processedPercent = task.total_images
     ? Math.round((task.processed_images / task.total_images) * 100)
     : 0;
+
+  const handleExportReport = async () => {
+    setExportingReport(true);
+    try {
+      await downloadTaskReportDocx(task.id, task.task_name);
+      message.success('报告已开始下载');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '报告导出失败';
+      message.error(errorMessage);
+    } finally {
+      setExportingReport(false);
+    }
+  };
 
   const tabItems = [
     { key: 'overview', label: '概览', children: <TaskOverview task={task} results={results} nests={nests} loading={loading} /> },
@@ -53,6 +69,9 @@ const TaskDetail: React.FC = () => {
         <div className="eco-actions">
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>
             返回
+          </Button>
+          <Button icon={<DownloadOutlined />} loading={exportingReport} onClick={handleExportReport}>
+            导出Word报告
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/tasks/create')}>
             新建任务

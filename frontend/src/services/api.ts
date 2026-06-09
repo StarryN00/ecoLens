@@ -179,11 +179,19 @@ export async function downloadTaskReportDocx(
   const link = document.createElement('a');
   link.href = url;
   const date = new Date().toISOString().split('T')[0];
-  link.download = `巡检报告_${taskName}_${date}.docx`;
+  link.download = `巡检报告_${sanitizeDownloadName(taskName)}_${date}.docx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function sanitizeDownloadName(name: string): string {
+  return name
+    .replace(/[\\/:*?"<>|\r\n\t]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || '未命名任务';
 }
 
 // 图片相关API
