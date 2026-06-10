@@ -240,12 +240,11 @@ function buildImagesCsv(images: TaskImage[]): string {
     formatNumber(img.altitude, 1),
     img.has_gps ? '是' : '否',
     img.detection ? (img.detection.has_nest ? '是' : '否') : '未检测',
-    img.detection?.nest_count ?? '',
     formatSeverity(img.detection?.max_severity),
   ]);
 
   return [
-    ['序号', '照片名称', '拍摄日期', '入库日期', '纬度', '经度', '海拔高度(m)', '是否有GPS', '是否有虫害', '虫害数量', '最高严重程度'],
+    ['序号', '照片名称', '拍摄日期', '入库日期', '纬度', '经度', '海拔高度(m)', '是否有GPS', '是否有虫害', '最高严重程度'],
     ...rows,
   ].map((row) => row.map(formatCsvCell).join(',')).join('\n');
 }
