@@ -7,7 +7,7 @@
 
 调用方(backend/app/api/reports.py)负责:
   1. 鉴权 + ownership(``Depends(get_owned_task)``)
-  2. 从 DB 把 task / results / nests / 标注图查出来,转成下面的 dict 结构
+  2. 从 DB 把 task / results / nests 查出来,转成下面的 dict 结构
   3. 调 ``build_task_report_docx`` 拿 bytes,用 ``StreamingResponse`` 返回,
      media_type =
      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -33,7 +33,7 @@ _STATUS_CN = {
 _SEVERITY_CN = {"severe": "重度", "medium": "中度", "light": "轻度"}
 
 
-def build_task_report_docx(*, task, results, nests, annotated_images) -> bytes:
+def build_task_report_docx(*, task, results, nests) -> bytes:
     """生成一份巡检任务 Word 报告,返回 .docx 的二进制内容。
 
     参数(全部是纯 Python 结构,不是 ORM 对象):
@@ -45,7 +45,6 @@ def build_task_report_docx(*, task, results, nests, annotated_images) -> bytes:
         {"image_stats": {...}, "nest_stats": {...}};任务无结果时传 None
       nests: list[dict] —— 每项键:
         nest_code, longitude, latitude, severity, confidence, detection_count
-      annotated_images: list[tuple[bytes, str]] —— [(JPEG字节, 图注), ...]
     """
     from docx import Document
 
@@ -56,7 +55,6 @@ def build_task_report_docx(*, task, results, nests, annotated_images) -> bytes:
     _section_basic_info(doc, task)
     _section_statistics(doc, results)
     _section_nest_list(doc, nests)
-    _section_annotated_images(doc, annotated_images)
 
     S.add_page_footer(doc, f"{SYSTEM_NAME} · 巡检报告")
 
@@ -138,6 +136,31 @@ def _section_statistics(doc, results):
         ],
     )
 
+    total_unique = nest_stats.get("total_unique", 0) or 0
+    severity_rows = []
+    for severity, label in (
+        ("severe", "重度"),
+        ("medium", "中度"),
+        ("light", "轻度"),
+    ):
+        count = nest_stats.get(severity, 0) or 0
+        ratio = (count / total_unique) if total_unique else 0
+        severity_rows.append(
+            [
+                label,
+                count,
+                _fmt_pct(ratio),
+                _bar_text(ratio),
+            ]
+        )
+
+    S.add_body(doc, "严重度分布图表:")
+    S.add_data_table(
+        doc,
+        ["严重度", "数量", "占比", "分布"],
+        severity_rows,
+    )
+
 
 # —— §3 虫巢清单 ————————————————————————————————————————
 def _section_nest_list(doc, nests):
@@ -166,17 +189,6 @@ def _section_nest_list(doc, nests):
         ["编号", "虫巢编码", "经度", "纬度", "严重度", "置信度", "检出次数"],
         rows,
     )
-
-
-# —— §4 标注影像附录 ——————————————————————————————————————
-def _section_annotated_images(doc, annotated_images):
-    S.add_heading(doc, "四、标注影像附录", level=1)
-    if not annotated_images:
-        S.add_body(doc, "无标注影像。")
-        return
-
-    for jpeg_bytes, caption in annotated_images:
-        S.add_image_with_caption(doc, jpeg_bytes, caption, width_inch=5.8)
 
 
 # —— 小工具 ————————————————————————————————————————————————
@@ -208,3 +220,9 @@ def _fmt_pct(value):
     if value is None:
         return "—"
     return f"{round(value * 100)}%"
+
+
+def _bar_text(ratio):
+    """用纯文本条形图表达占比,避免在报告中嵌入图片。"""
+    filled = round((ratio or 0) * 20)
+    return "#" * filled + "-" * (20 - filled)

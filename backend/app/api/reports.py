@@ -7,7 +7,6 @@ GET /api/v1/tasks/{task_id}/report.docx
 """
 
 import io
-import os
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -18,15 +17,12 @@ from app.api.deps import get_owned_task
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models import (
-    Image,
     ImageDetection,
     InspectionTask,
-    RawNestDetection,
     Region,
     UniqueNest,
 )
 from app.services.docx_report import build_task_report_docx
-from app.services.image_render import render_annotated_image
 
 router = APIRouter(
     prefix="/api/v1",
@@ -37,10 +33,6 @@ router = APIRouter(
 DOCX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
-# 报告附录最多嵌入多少张标注影像
-MAX_ANNOTATED_IMAGES = 6
-# 报告内嵌图按 1280 宽压缩(报告无需全分辨率,控体积)
-REPORT_IMAGE_MAX_WIDTH = 1280
 
 
 @router.get("/tasks/{task_id}/report.docx")
@@ -76,13 +68,11 @@ async def export_task_report_docx(
 
     results = await _build_results(db, task_id)
     nests = await _build_nest_list(db, task_id)
-    annotated_images = await _build_annotated_images(db, task_id)
 
     docx_bytes = build_task_report_docx(
         task=task_data,
         results=results,
         nests=nests,
-        annotated_images=annotated_images,
     )
 
     filename = f"report_{task_id}.docx"
@@ -154,57 +144,3 @@ async def _build_nest_list(db: AsyncSession, task_id: str) -> list[dict]:
         }
         for n in rows
     ]
-
-
-async def _build_annotated_images(
-    db: AsyncSession, task_id: str
-) -> list[tuple[bytes, str]]:
-    """挑选含虫巢的图片(按虫巢数降序),渲染标注图供报告附录使用。"""
-    top = (
-        await db.execute(
-            select(ImageDetection)
-            .where(
-                ImageDetection.task_id == task_id,
-                ImageDetection.has_nest.is_(True),
-            )
-            .order_by(ImageDetection.nest_count.desc())
-            .limit(MAX_ANNOTATED_IMAGES)
-        )
-    ).scalars().all()
-
-    annotated: list[tuple[bytes, str]] = []
-    for det in top:
-        image = (
-            await db.execute(select(Image).where(Image.id == det.image_id))
-        ).scalar_one_or_none()
-        if image is None or not image.storage_path:
-            continue
-        if not os.path.exists(image.storage_path):
-            continue
-        raw = (
-            await db.execute(
-                select(RawNestDetection).where(
-                    RawNestDetection.image_id == det.image_id
-                )
-            )
-        ).scalars().all()
-        try:
-            jpeg = render_annotated_image(
-                image.storage_path, raw, max_width=REPORT_IMAGE_MAX_WIDTH
-            )
-        except Exception:  # noqa: BLE001 — 单张图渲染失败不拖垮整份报告
-            continue
-        annotated.append((jpeg, _image_caption(image)))
-    return annotated
-
-
-def _image_caption(image: Image) -> str:
-    """标注图图注:文件名 +(可选)GPS 坐标。"""
-    caption = image.filename or "未命名影像"
-    if (
-        image.has_gps
-        and image.latitude is not None
-        and image.longitude is not None
-    ):
-        caption += f"　({image.latitude:.6f}, {image.longitude:.6f})"
-    return caption

@@ -6,6 +6,7 @@
 """
 
 import io
+import zipfile
 
 from docx import Document
 
@@ -52,7 +53,16 @@ class TestTaskReportDocx:
         assert name in text
         assert "任务基本信息" in text
         assert "检测统计" in text
+        assert "严重度分布图表" in text
         assert "虫巢清单" in text
+        assert "标注影像附录" not in text
+
+        with zipfile.ZipFile(io.BytesIO(r.content)) as docx_zip:
+            media_files = [
+                name for name in docx_zip.namelist()
+                if name.startswith("word/media/")
+            ]
+        assert media_files == []
 
     def test_export_report_attachment_header(
         self, client, auth_headers, town_region_id

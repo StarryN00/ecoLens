@@ -246,7 +246,7 @@ async def get_image_annotated(
     )
     detections = result.scalars().all()
 
-    # 渲染逻辑统一在 image_render.render_annotated_image（T5 报告共用）
+    # 渲染逻辑统一在 image_render.render_annotated_image
     jpeg_bytes = render_annotated_image(
         img.storage_path, detections, max_width=max_width
     )
