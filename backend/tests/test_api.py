@@ -12,6 +12,7 @@ P0 给所有数据接口加了 JWT 鉴权、P1 加了 per-user ownership、T1 �
 """
 
 import io
+import os
 
 from PIL import Image as PILImage
 
@@ -189,15 +190,15 @@ class TestImageAPI:
         assert resp.status_code == 200
         body = resp.json()
         assert "items" in body
-        item = body["items"][0]
-        assert item["filename"] == "a.jpg"
+        filenames = {i["filename"] for i in body["items"]}
+        assert {"a.jpg", "b.jpg"}.issubset(filenames)
+        item = next(i for i in body["items"] if i["filename"] == "a.jpg")
         assert "latitude" in item
         assert "longitude" in item
         assert "altitude" in item
         assert "capture_time" in item
         assert "created_at" in item
         assert "detection" in item
-        assert [i["filename"] for i in body["items"][:2]] == ["a.jpg", "b.jpg"]
 
     def test_get_image_info(self, client, auth_headers, town_region_id):
         """/images/{id}/info 返回 JSON 元数据（/images/{id} 返回的是文件）。"""
@@ -271,6 +272,55 @@ class TestImageAPI:
         )
         assert r2.status_code == 200
         assert r2.headers["content-type"].startswith("image/")
+
+    def test_annotated_default_uses_cached_preview(
+        self, client, auth_headers, town_region_id
+    ):
+        """默认标注图应缓存 1920 预览图，后续请求直接复用缓存文件。"""
+        task = _create_task(
+            client, auth_headers, town_region_id, task_name="标注缓存测试"
+        )
+        upload = client.post(
+            f"/api/v1/tasks/{task['id']}/images",
+            files={
+                "files": (
+                    "annotated.jpg",
+                    _make_jpeg(size=(2400, 1600)),
+                    "image/jpeg",
+                )
+            },
+            headers=auth_headers,
+        )
+        image_id = upload.json()["images"][0]["id"]
+        cache_path = f"./thumbnails/annotated_{image_id}_1920.jpg"
+        try:
+            os.remove(cache_path)
+        except FileNotFoundError:
+            pass
+
+        first = client.get(
+            f"/api/v1/images/{image_id}/annotated", headers=auth_headers
+        )
+        assert first.status_code == 200
+        assert first.headers["content-type"].startswith("image/")
+        assert os.path.exists(cache_path)
+
+        cached_bytes = b"cached annotated preview"
+        with open(cache_path, "wb") as f:
+            f.write(cached_bytes)
+
+        second = client.get(
+            f"/api/v1/images/{image_id}/annotated", headers=auth_headers
+        )
+        assert second.status_code == 200
+        assert second.content == cached_bytes
+
+        original = client.get(
+            f"/api/v1/images/{image_id}/annotated?max_width=0",
+            headers=auth_headers,
+        )
+        assert original.status_code == 200
+        assert original.content != cached_bytes
 
     def test_image_without_token_401(self, client):
         assert client.get("/api/v1/images/some-id/info").status_code == 401

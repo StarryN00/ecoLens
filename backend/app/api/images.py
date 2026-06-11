@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -5,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_owned_image, get_owned_task
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models import Image, ImageDetection, InspectionTask
@@ -15,6 +17,37 @@ router = APIRouter(
     tags=["images"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _annotated_cache_path(image_id: str, max_width: int) -> Path:
+    settings = get_settings()
+    return Path(settings.THUMBNAIL_DIR) / f"annotated_{image_id}_{max_width}.jpg"
+
+
+def _is_annotated_cache_fresh(cache_path: Path, img: Image, detections) -> bool:
+    if not cache_path.exists():
+        return False
+
+    cache_mtime = cache_path.stat().st_mtime
+    try:
+        if cache_mtime < Path(img.storage_path).stat().st_mtime:
+            return False
+    except FileNotFoundError:
+        # If the original is gone but a cached preview exists, serving it is
+        # still cheaper and more useful than failing the list thumbnail.
+        return True
+
+    for det in detections:
+        if det.created_at and cache_mtime < det.created_at.timestamp():
+            return False
+    return True
+
+
+def _write_annotated_cache(cache_path: Path, jpeg_bytes: bytes) -> None:
+    cache_path.parent.mkdir(exist_ok=True, parents=True)
+    tmp_path = cache_path.with_name(f"{cache_path.name}.tmp")
+    tmp_path.write_bytes(jpeg_bytes)
+    tmp_path.replace(cache_path)
 
 
 @router.post("/tasks/{task_id}/images")
@@ -229,7 +262,7 @@ async def get_image_annotated(
     import io
     import os
 
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import FileResponse, StreamingResponse
 
     from app.models import RawNestDetection
     from app.services.image_render import render_annotated_image
@@ -237,17 +270,30 @@ async def get_image_annotated(
     if max_width < 0:
         raise HTTPException(status_code=400, detail="max_width 不能为负数")
 
-    if not os.path.exists(img.storage_path):
-        raise HTTPException(status_code=404, detail="图片文件不存在")
-
     # 获取检测框数据
     result = await db.execute(
         select(RawNestDetection).where(RawNestDetection.image_id == str(img.id))
     )
     detections = result.scalars().all()
 
+    cache_path = None
+    if max_width > 0:
+        cache_path = _annotated_cache_path(str(img.id), max_width)
+        if _is_annotated_cache_fresh(cache_path, img, detections):
+            return FileResponse(
+                cache_path,
+                filename=f"annotated_{img.filename}",
+                content_disposition_type="inline",
+                media_type="image/jpeg",
+            )
+
+    if not os.path.exists(img.storage_path):
+        raise HTTPException(status_code=404, detail="图片文件不存在")
+
     # 渲染逻辑统一在 image_render.render_annotated_image
     jpeg_bytes = render_annotated_image(
         img.storage_path, detections, max_width=max_width
     )
+    if cache_path is not None:
+        _write_annotated_cache(cache_path, jpeg_bytes)
     return StreamingResponse(io.BytesIO(jpeg_bytes), media_type="image/jpeg")
