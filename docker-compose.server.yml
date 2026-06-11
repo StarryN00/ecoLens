@@ -41,6 +41,6 @@ services:
       - backend
 
   redis:
-    image: redis:7-alpine
+    image: docker.1ms.run/redis:7-alpine
     ports:
       - "6379:6379"
