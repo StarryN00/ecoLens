@@ -6,8 +6,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./uploads:/app/uploads
-      - ./thumbnails:/app/thumbnails
+      - ./backend/nestdb.sqlite:/app/nestdb.sqlite
+      - ./backend/uploads:/app/uploads
+      - ./backend/thumbnails:/app/thumbnails
       - ./backend/models:/app/models
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./nestdb.sqlite
@@ -21,8 +22,9 @@ services:
   celery:
     build: ./backend
     volumes:
-      - ./uploads:/app/uploads
-      - ./thumbnails:/app/thumbnails
+      - ./backend/nestdb.sqlite:/app/nestdb.sqlite
+      - ./backend/uploads:/app/uploads
+      - ./backend/thumbnails:/app/thumbnails
       - ./backend/models:/app/models
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./nestdb.sqlite
@@ -37,6 +39,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+    profiles:
+      - frontend-container
     ports:
       - "80:80"
     depends_on:
