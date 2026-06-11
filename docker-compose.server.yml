@@ -34,7 +34,9 @@ services:
     command: celery -A app.core.celery_app worker --loglevel=info --pool=solo
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
     ports:
       - "80:80"
     depends_on:
@@ -42,5 +44,3 @@ services:
 
   redis:
     image: docker.1ms.run/redis:7-alpine
-    ports:
-      - "6379:6379"
