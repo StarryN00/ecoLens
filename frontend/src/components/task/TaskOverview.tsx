@@ -73,14 +73,17 @@ const TaskOverview: React.FC<Props> = ({ task, results, nests, loading }) => {
         {results && (
           <Row gutter={16} style={{ marginTop: 24 }}>
             <Col span={8}>
-              <Statistic title="含虫巢图片" value={results.image_stats.with_nests} />
-            </Col>
-            <Col span={8}>
-              <Statistic title="虫巢检测总数" value={results.image_stats.total_nest_detections} />
+              <Statistic title="含疑似虫巢图片" value={results.image_stats.with_nests} />
             </Col>
             <Col span={8}>
               <Statistic
-                title="去重后虫巢"
+                title="候选框数量"
+                value={results.image_stats.total_candidate_detections ?? results.image_stats.total_nest_detections}
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="疑似虫巢点"
                 value={results.nest_stats.total_unique}
                 valueStyle={{ color: results.nest_stats.severe > 0 ? '#cf1322' : undefined }}
               />

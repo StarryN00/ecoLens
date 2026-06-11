@@ -67,6 +67,39 @@ def _nms(
     return keep
 
 
+def _filter_pixel_dets(
+    detections: List[Dict[str, Any]],
+    width: int,
+    height: int,
+    min_area_ratio: float,
+    min_side_ratio: float,
+    max_detections: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Filter obvious low-value candidate boxes before persisting/displaying.
+
+    The legacy demo model needs a low confidence threshold for recall, so this
+    second-stage geometric filter removes tiny leaf-texture hits and caps noisy
+    single-image outputs while preserving the highest confidence candidates.
+    """
+    image_area = max(1, width * height)
+    min_side_px = min(width, height) * max(0.0, min_side_ratio)
+    out: List[Dict[str, Any]] = []
+    for det in detections:
+        box_w = max(0.0, det["x2"] - det["x1"])
+        box_h = max(0.0, det["y2"] - det["y1"])
+        area_ratio = (box_w * box_h) / image_area
+        if area_ratio < min_area_ratio:
+            continue
+        if min(box_w, box_h) < min_side_px:
+            continue
+        out.append(det)
+
+    out = sorted(out, key=lambda d: d["conf"], reverse=True)
+    if max_detections and max_detections > 0:
+        out = out[:max_detections]
+    return out
+
+
 class NestDetector:
     """基于 YOLOv8 的虫巢检测器"""
 
@@ -82,6 +115,15 @@ class NestDetector:
             conf_threshold
             if conf_threshold is not None
             else getattr(settings, "CONFIDENCE_THRESHOLD", 0.5)
+        )
+        self.min_bbox_area_ratio: float = getattr(
+            settings, "NEST_MIN_BBOX_AREA_RATIO", 0.0002
+        )
+        self.min_bbox_side_ratio: float = getattr(
+            settings, "NEST_MIN_BBOX_SIDE_RATIO", 0.01
+        )
+        self.max_candidates_per_image: int = getattr(
+            settings, "NEST_MAX_CANDIDATES_PER_IMAGE", 30
         )
 
         self._model: Optional[Any] = None
@@ -240,6 +282,14 @@ class NestDetector:
                 source=image_path, conf=self.conf_threshold, verbose=False
             )
             pixel_dets = self._parse_yolo_results(results, offset_x=0, offset_y=0)
+            pixel_dets = _filter_pixel_dets(
+                pixel_dets,
+                width,
+                height,
+                self.min_bbox_area_ratio,
+                self.min_bbox_side_ratio,
+                self.max_candidates_per_image,
+            )
             detections = self._pixel_dets_to_normalized(pixel_dets, width, height)
             logger.info(f"全图推理完成，检测到 {len(detections)} 个目标")
             return detections
@@ -274,6 +324,15 @@ class NestDetector:
         logger.info(f"切片推理原始检测数: {len(all_pixel_dets)}")
         merged = _nms(all_pixel_dets, iou_threshold=0.5)
         logger.info(f"NMS 后检测数: {len(merged)}")
+        merged = _filter_pixel_dets(
+            merged,
+            width,
+            height,
+            self.min_bbox_area_ratio,
+            self.min_bbox_side_ratio,
+            self.max_candidates_per_image,
+        )
+        logger.info(f"几何过滤后检测数: {len(merged)}")
         return self._pixel_dets_to_normalized(merged, width, height)
 
 

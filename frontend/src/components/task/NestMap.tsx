@@ -232,7 +232,7 @@ const NestMap: React.FC<Props> = ({ nests, images, loading }) => {
             : '';
         const detectionCount =
           typeof point.detectionCount === 'number'
-            ? `<div>检测次数：${point.detectionCount}</div>`
+            ? `<div>候选支持数：${point.detectionCount}</div>`
             : '';
         infoWindowRef.current?.setContent(
           `<div class="amap-info-window">

@@ -130,7 +130,7 @@ async def get_task_results(
     # 统计有香樟树和虫巢的图片数
     camphor_count = sum(1 for d in detections if d.has_camphor_tree)
     nest_count = sum(1 for d in detections if d.has_nest)
-    total_nests_detected = sum(d.nest_count for d in detections)
+    total_candidate_detections = sum(d.nest_count for d in detections)
 
     # 查询去重后的虫巢统计
     nests_result = await db.execute(
@@ -149,7 +149,8 @@ async def get_task_results(
             "total_processed": len(detections),
             "with_camphor_tree": camphor_count,
             "with_nests": nest_count,
-            "total_nest_detections": total_nests_detected,
+            "total_candidate_detections": total_candidate_detections,
+            "total_nest_detections": total_candidate_detections,
         },
         "nest_stats": {
             "total_unique": nest_stats.total or 0,

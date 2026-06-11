@@ -54,7 +54,7 @@ class TestTaskReportDocx:
         assert "任务基本信息" in text
         assert "检测统计" in text
         assert "严重度分布图表" in text
-        assert "虫巢清单" in text
+        assert "疑似虫巢点清单" in text
         assert "标注影像附录" not in text
 
         with zipfile.ZipFile(io.BytesIO(r.content)) as docx_zip:

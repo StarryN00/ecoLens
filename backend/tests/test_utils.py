@@ -398,3 +398,40 @@ class TestNestDetectorNMS:
         nest_detector._install_legacy_ultralytics_compat()
 
         assert hasattr(fake_loss, "DFLoss")
+
+    def test_filter_pixel_dets_removes_tiny_candidates(self):
+        from app.services.nest_detector import _filter_pixel_dets
+
+        keep = {"x1": 100, "y1": 100, "x2": 145, "y2": 190, "conf": 0.04}
+        tiny = {"x1": 300, "y1": 300, "x2": 306, "y2": 308, "conf": 0.08}
+
+        result = _filter_pixel_dets(
+            [tiny, keep],
+            width=4000,
+            height=3000,
+            min_area_ratio=0.0002,
+            min_side_ratio=0.01,
+            max_detections=None,
+        )
+
+        assert result == [keep]
+
+    def test_filter_pixel_dets_caps_by_confidence(self):
+        from app.services.nest_detector import _filter_pixel_dets
+
+        dets = [
+            {"x1": 0, "y1": 0, "x2": 100, "y2": 100, "conf": 0.02},
+            {"x1": 120, "y1": 0, "x2": 220, "y2": 100, "conf": 0.07},
+            {"x1": 240, "y1": 0, "x2": 340, "y2": 100, "conf": 0.04},
+        ]
+
+        result = _filter_pixel_dets(
+            dets,
+            width=1000,
+            height=1000,
+            min_area_ratio=0,
+            min_side_ratio=0,
+            max_detections=2,
+        )
+
+        assert [d["conf"] for d in result] == [0.07, 0.04]

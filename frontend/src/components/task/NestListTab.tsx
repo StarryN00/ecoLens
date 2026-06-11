@@ -15,11 +15,11 @@ const nestColumns: ColumnsType<Nest> = [
   { title: '纬度', dataIndex: 'latitude', key: 'latitude', render: (v: number) => v?.toFixed(6) },
   { title: '严重程度', dataIndex: 'severity', key: 'severity', render: getSeverityTag },
   { title: '置信度', dataIndex: 'confidence', key: 'confidence', render: (v: number) => `${(v * 100).toFixed(1)}%` },
-  { title: '检测次数', dataIndex: 'detection_count', key: 'detection_count' },
+  { title: '候选支持数', dataIndex: 'detection_count', key: 'detection_count' },
 ];
 
 const NestListTab: React.FC<Props> = ({ nests, loading }) => (
-  <Card className="eco-panel" title="虫巢列表" loading={loading}>
+  <Card className="eco-panel" title="疑似虫巢点列表" loading={loading}>
     <Table
       columns={nestColumns}
       dataSource={nests}

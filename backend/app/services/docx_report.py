@@ -110,22 +110,25 @@ def _section_statistics(doc, results):
     S.add_body(doc, "影像处理统计:")
     S.add_data_table(
         doc,
-        ["处理图片数", "含香樟树", "含虫巢", "虫巢检测总数"],
+        ["处理图片数", "含香樟树", "含疑似虫巢", "候选框数量"],
         [
             [
                 image_stats.get("total_processed", 0),
                 image_stats.get("with_camphor_tree", 0),
                 image_stats.get("with_nests", 0),
-                image_stats.get("total_nest_detections", 0),
+                image_stats.get(
+                    "total_candidate_detections",
+                    image_stats.get("total_nest_detections", 0),
+                ),
             ]
         ],
     )
 
     nest_stats = results.get("nest_stats") or {}
-    S.add_body(doc, "虫巢去重统计:")
+    S.add_body(doc, "疑似虫巢点聚合统计:")
     S.add_data_table(
         doc,
-        ["去重后虫巢", "重度", "中度", "轻度"],
+        ["疑似虫巢点", "重度", "中度", "轻度"],
         [
             [
                 nest_stats.get("total_unique", 0),
@@ -162,11 +165,11 @@ def _section_statistics(doc, results):
     )
 
 
-# —— §3 虫巢清单 ————————————————————————————————————————
+# —— §3 疑似虫巢点清单 ——————————————————————————————————
 def _section_nest_list(doc, nests):
-    S.add_heading(doc, "三、虫巢清单", level=1)
+    S.add_heading(doc, "三、疑似虫巢点清单", level=1)
     if not nests:
-        S.add_body(doc, "未发现虫巢。")
+        S.add_body(doc, "未发现疑似虫巢点。")
         return
 
     rows = []
@@ -186,7 +189,7 @@ def _section_nest_list(doc, nests):
         )
     S.add_data_table(
         doc,
-        ["编号", "虫巢编码", "经度", "纬度", "严重度", "置信度", "检出次数"],
+        ["编号", "虫巢编码", "经度", "纬度", "严重度", "置信度", "候选支持数"],
         rows,
     )
 

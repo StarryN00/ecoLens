@@ -106,6 +106,7 @@ async def _build_results(db: AsyncSession, task_id: str) -> dict:
             ).where(UniqueNest.task_id == task_id)
         )
     ).one()
+    total_candidate_detections = sum(d.nest_count for d in detections)
     return {
         "image_stats": {
             "total_processed": len(detections),
@@ -113,7 +114,8 @@ async def _build_results(db: AsyncSession, task_id: str) -> dict:
                 1 for d in detections if d.has_camphor_tree
             ),
             "with_nests": sum(1 for d in detections if d.has_nest),
-            "total_nest_detections": sum(d.nest_count for d in detections),
+            "total_candidate_detections": total_candidate_detections,
+            "total_nest_detections": total_candidate_detections,
         },
         "nest_stats": {
             "total_unique": nest_stats.total or 0,

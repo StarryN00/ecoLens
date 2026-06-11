@@ -32,6 +32,7 @@ export interface TaskResults {
     total_processed: number;
     with_camphor_tree: number;
     with_nests: number;
+    total_candidate_detections?: number;
     total_nest_detections: number;
   };
   nest_stats: {

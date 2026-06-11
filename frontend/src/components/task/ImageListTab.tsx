@@ -85,13 +85,19 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
       render: (v: number) => (v ? `${v.toFixed(1)}m` : '-'),
     },
     {
-      title: '虫巢',
+      title: '疑似虫巢',
       key: 'nest',
       width: 80,
       render: (_: any, record: TaskImage) => {
         if (!record.detection) return <Tag color="default">未检测</Tag>;
         return record.detection.has_nest ? <Tag color="red">有</Tag> : <Tag color="default">无</Tag>;
       },
+    },
+    {
+      title: '候选框',
+      key: 'candidate_count',
+      width: 90,
+      render: (_: any, record: TaskImage) => record.detection?.nest_count ?? '-',
     },
     {
       title: '严重程度',
@@ -153,17 +159,17 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
           <Col>
             <span style={{ fontWeight: 'bold' }}>
               <FileImageOutlined style={{ color: '#1f7a4d', marginRight: 6 }} />
-              虫巢检测统计
+              疑似虫巢统计
             </span>
           </Col>
           <Col>
             <Tag color="blue">总图片: {totalImages}</Tag>
           </Col>
           <Col>
-            <Tag color="red">有虫巢: {imagesWithNest} ({nestRatio}%)</Tag>
+            <Tag color="red">有疑似: {imagesWithNest} ({nestRatio}%)</Tag>
           </Col>
           <Col>
-            <Tag color="green">无虫巢: {imagesWithoutNest}</Tag>
+            <Tag color="green">无疑似: {imagesWithoutNest}</Tag>
           </Col>
           <Col flex="auto" style={{ textAlign: 'right' }}>
             <span style={{ marginRight: 8 }}>筛选：</span>
@@ -180,14 +186,14 @@ const ImageListTab: React.FC<Props> = ({ images, task, loading }) => {
                 size="small"
                 onClick={() => setImageFilter('with_nest')}
               >
-                有虫巢
+                有疑似
               </Button>
               <Button
                 type={imageFilter === 'without_nest' ? 'primary' : 'default'}
                 size="small"
                 onClick={() => setImageFilter('without_nest')}
               >
-                无虫巢
+                无疑似
               </Button>
             </Button.Group>
           </Col>
@@ -240,11 +246,12 @@ function buildImagesCsv(images: TaskImage[]): string {
     formatNumber(img.altitude, 1),
     img.has_gps ? '是' : '否',
     img.detection ? (img.detection.has_nest ? '是' : '否') : '未检测',
+    img.detection?.nest_count ?? '',
     formatSeverity(img.detection?.max_severity),
   ]);
 
   return [
-    ['序号', '照片名称', '拍摄日期', '入库日期', '纬度', '经度', '海拔高度(m)', '是否有GPS', '是否有虫害', '最高严重程度'],
+    ['序号', '照片名称', '拍摄日期', '入库日期', '纬度', '经度', '海拔高度(m)', '是否有GPS', '是否有疑似虫巢', '候选框数量', '最高严重程度'],
     ...rows,
   ].map((row) => row.map(formatCsvCell).join(',')).join('\n');
 }

@@ -61,9 +61,9 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     doc.text('统计信息', 20, 125);
     doc.text(`图片总数: ${data.total_images}`, 30, 135);
     doc.text(`已处理: ${data.processed_images}`, 30, 145);
-    doc.text(`发现虫巢: ${data.nests.length} 个`, 30, 155);
+    doc.text(`疑似虫巢点: ${data.nests.length} 个`, 30, 155);
     
-    // 虫巢列表表格
+    // 疑似虫巢点列表表格
     const tableData = data.nests.map(nest => [
       nest.nest_code,
       nest.latitude.toFixed(6),
@@ -75,7 +75,7 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     
     (doc as any).autoTable({
       startY: 170,
-      head: [['编号', '纬度', '经度', '严重程度', '置信度', '检测次数']],
+      head: [['编号', '纬度', '经度', '严重程度', '置信度', '候选支持数']],
       body: tableData,
       theme: 'grid',
       styles: { fontSize: 10 },
@@ -101,22 +101,22 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
       ['完成时间', data.completed_at ? new Date(data.completed_at).toLocaleString() : '-'],
       ['图片总数', data.total_images],
       ['已处理', data.processed_images],
-      ['虫巢数量', data.nests.length],
+      ['疑似虫巢点', data.nests.length],
     ];
     const infoWs = XLSX.utils.aoa_to_sheet(infoData);
     XLSX.utils.book_append_sheet(wb, infoWs, '基本信息');
     
-    // 虫巢列表sheet
+    // 疑似虫巢点列表sheet
     const nestsData = data.nests.map(nest => ({
       '编号': nest.nest_code,
       '纬度': nest.latitude,
       '经度': nest.longitude,
       '严重程度': nest.severity === 'severe' ? '重度' : nest.severity === 'medium' ? '中度' : '轻度',
       '置信度': `${(nest.confidence * 100).toFixed(1)}%`,
-      '检测次数': nest.detection_count,
+      '候选支持数': nest.detection_count,
     }));
     const nestsWs = XLSX.utils.json_to_sheet(nestsData);
-    XLSX.utils.book_append_sheet(wb, nestsWs, '虫巢列表');
+    XLSX.utils.book_append_sheet(wb, nestsWs, '疑似点列表');
     
     XLSX.writeFile(wb, `巡检报告_${data.task_name}_${new Date().toISOString().split('T')[0]}.xlsx`);
     message.success('Excel报告已导出');
@@ -129,7 +129,7 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
       经度: nest.longitude,
       严重程度: nest.severity,
       置信度: nest.confidence,
-      检测次数: nest.detection_count,
+      候选支持数: nest.detection_count,
     }));
     
     const ws = XLSX.utils.json_to_sheet(csvData);
@@ -138,7 +138,7 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ data }) => {
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `虫巢数据_${data.task_name}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `疑似虫巢点数据_${data.task_name}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     
     message.success('CSV文件已导出');

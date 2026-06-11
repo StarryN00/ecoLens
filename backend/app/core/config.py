@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # AI模型 - 虫巢检测
     NEST_DETECTION_MODEL_PATH: str = "./models/nest_det.pt"
     CONFIDENCE_THRESHOLD: float = 0.5
+    NEST_MIN_BBOX_AREA_RATIO: float = 0.0002
+    NEST_MIN_BBOX_SIDE_RATIO: float = 0.01
+    NEST_MAX_CANDIDATES_PER_IMAGE: int = 30
 
     # AI模型 - 树种识别
     TREE_CLASSIFICATION_MODEL_PATH: str = "./models/tree_seg.pt"
