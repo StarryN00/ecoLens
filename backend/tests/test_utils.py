@@ -3,6 +3,7 @@
 """
 
 import math
+import types
 
 import pytest
 
@@ -387,3 +388,13 @@ class TestNestDetectorNMS:
                 width=100, height=100,
             )
             assert dets[0]["severity"] == expected
+
+    def test_legacy_ultralytics_compat_installs_dfloss(self, monkeypatch):
+        from app.services import nest_detector
+
+        fake_loss = types.SimpleNamespace()
+        monkeypatch.setattr(nest_detector, "_ultralytics_loss", fake_loss)
+
+        nest_detector._install_legacy_ultralytics_compat()
+
+        assert hasattr(fake_loss, "DFLoss")

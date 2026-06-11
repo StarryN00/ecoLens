@@ -174,8 +174,8 @@ class TestChordOrchestration:
 
         # 3 张图 -> 3 个 process_image_task.s 调用
         assert len(captured["header_s_calls"]) == 3
-        for (passed_task, passed_args), expected_img in zip(
-            captured["header_s_calls"], image_ids, strict=True
+        for (passed_task, passed_args), expected_img in zip(  # noqa: B905
+            captured["header_s_calls"], image_ids
         ):
             assert passed_task == task_id
             assert passed_args == (expected_img,)
@@ -332,6 +332,39 @@ class TestCallbackHandlesHeaderFailures:
         out = it.process_task_deduplication(task_id)
         assert out["status"] == "success"
         assert called["task_id"] == task_id
+
+
+# ---------------------------------------------------------------------------
+# completed_at: 去重收尾必须记录完成时间
+# ---------------------------------------------------------------------------
+class TestTaskCompletionTimestamp:
+    def test_deduplicate_task_sync_sets_completed_at(self):
+        from app.tasks import inference_tasks as it
+
+        Base.metadata.create_all(sync_engine)
+        task_id = str(uuid.uuid4())
+        with SyncSessionLocal() as db:
+            owner_id = _ensure_owner(db)
+            db.add(
+                InspectionTask(
+                    id=task_id,
+                    task_name="completion-time",
+                    total_images=0,
+                    processed_images=0,
+                    status="processing",
+                    owner_id=owner_id,
+                )
+            )
+            db.commit()
+
+        out = it.deduplicate_task_sync(task_id)
+        assert out["status"] == "success"
+
+        with SyncSessionLocal() as db:
+            task = db.query(InspectionTask).filter_by(id=task_id).one()
+
+        assert task.status == "completed"
+        assert task.completed_at is not None
 
 
 # ---------------------------------------------------------------------------

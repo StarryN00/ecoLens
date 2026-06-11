@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from celery import chord, group, shared_task  # noqa: F401  (保留导出兼容)
@@ -311,6 +312,7 @@ def deduplicate_task_sync(task_id: str) -> Dict[str, Any]:
             ).scalar_one_or_none()
             if task is not None:
                 task.status = "completed"
+                task.completed_at = datetime.utcnow()
 
             db.commit()
             logger.info(f"去重完成: task_id={task_id}, unique_nests={count}")

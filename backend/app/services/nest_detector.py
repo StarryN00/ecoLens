@@ -12,10 +12,28 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 try:
+    import ultralytics.utils.loss as _ultralytics_loss  # type: ignore
     from ultralytics import YOLO  # type: ignore
 except Exception as e:  # pragma: no cover
     logger.error(f"YOLO导入失败: {e}")
     YOLO = None  # type: ignore
+    _ultralytics_loss = None  # type: ignore
+
+
+def _install_legacy_ultralytics_compat() -> None:
+    """Install shims required to unpickle older YOLO checkpoints.
+
+    Some demo-era weights reference ultralytics.utils.loss.DFLoss. The
+    currently pinned ultralytics==8.0.200 no longer exposes that class, but the
+    loaded model does not need the training loss object for inference.
+    """
+    if _ultralytics_loss is None or hasattr(_ultralytics_loss, "DFLoss"):
+        return
+
+    class DFLoss:  # pragma: no cover - exercised through checkpoint loading
+        pass
+
+    _ultralytics_loss.DFLoss = DFLoss
 
 # ---------------------------------------------------------------------------
 # Module-level NMS helpers (no YOLO dependency)
@@ -106,6 +124,7 @@ class NestDetector:
             return
 
         try:
+            _install_legacy_ultralytics_compat()
             self._model = YOLO(self._resolved_model_path)
             logger.info(f"模型加载成功: {self._resolved_model_path}")
         except Exception as e:
